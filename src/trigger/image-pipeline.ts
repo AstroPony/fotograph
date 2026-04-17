@@ -84,8 +84,9 @@ export const imagePipelineTask = task({
         .toBuffer();
 
       // Mask: extract alpha, negate → transparent areas become white (generate), product becomes black (keep)
-      const alphaNeg = await sharp(canvas).extractChannel("alpha").negate().toBuffer();
-      const mask = await sharp(alphaNeg, { raw: { width: SIZE, height: SIZE, channels: 1 } })
+      const mask = await sharp(canvas)
+        .extractChannel("alpha")
+        .negate()
         .png()
         .toBuffer();
 
