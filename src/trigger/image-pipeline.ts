@@ -6,6 +6,8 @@ import sharp from "sharp";
 import { randomUUID } from "crypto";
 
 const BUCKET = process.env.CLOUDFLARE_R2_BUCKET_NAME;
+const SIZE = 1024;
+const PRODUCT_MAX = Math.round(SIZE * 0.70);
 
 export const imagePipelineTask = task({
   id: "image-pipeline",
@@ -30,7 +32,7 @@ export const imagePipelineTask = task({
       if (!rawObj.Body) throw new Error(`R2 object body missing for key: ${rawR2Key}`);
       const rawBuffer = Buffer.from(await rawObj.Body.transformToByteArray());
 
-      // 2. Background removal via Photoroom
+      // 2. Background removal via Photoroom → transparent PNG
       logger.info("Removing background");
       await prisma.image.update({ where: { id: imageId }, data: { status: "REMOVING_BG" } });
 
@@ -42,7 +44,6 @@ export const imagePipelineTask = task({
         headers: { "x-api-key": process.env.PHOTOROOM_API_KEY! },
         body: formData,
       });
-
       if (!photoroomRes.ok) {
         throw new Error(`Photoroom error ${photoroomRes.status}: ${await photoroomRes.text()}`);
       }
@@ -62,12 +63,40 @@ export const imagePipelineTask = task({
         data: { bgRemovedR2Key: bgRemovedKey, status: "GENERATING" },
       });
 
-      // 3. Generate background scene with FLUX Schnell (text-to-image only — no img input)
-      //    Product is composited on top by Sharp in step 4.
-      logger.info("Generating background scene with FLUX Schnell");
+      // 3. Prepare image + mask for FLUX Fill inpainting
+      //    - Center product (transparent PNG) on a 1024x1024 RGBA canvas
+      //    - Derive mask from alpha: white=generate background, black=keep product
+      logger.info("Preparing inpainting canvas and mask");
+
+      const productFit = await sharp(bgRemovedBuffer)
+        .resize(PRODUCT_MAX, PRODUCT_MAX, { fit: "inside" })
+        .toBuffer();
+      const { width: pw, height: ph } = await sharp(productFit).metadata();
+      const pLeft = Math.round((SIZE - pw!) / 2);
+      const pTop = Math.round((SIZE - ph!) / 2);
+
+      // Product centered on transparent canvas (alpha=0 background)
+      const canvas = await sharp({
+        create: { width: SIZE, height: SIZE, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 0 } },
+      })
+        .composite([{ input: productFit, left: pLeft, top: pTop }])
+        .png()
+        .toBuffer();
+
+      // Mask: extract alpha, negate → transparent areas become white (generate), product becomes black (keep)
+      const alphaNeg = await sharp(canvas).extractChannel("alpha").negate().toBuffer();
+      const mask = await sharp(alphaNeg, { raw: { width: SIZE, height: SIZE, channels: 1 } })
+        .png()
+        .toBuffer();
+
+      const imageB64 = `data:image/png;base64,${canvas.toString("base64")}`;
+      const maskB64 = `data:image/png;base64,${mask.toString("base64")}`;
+
+      // 4. FLUX Fill inpainting — generates the scene around the product naturally
+      logger.info("Generating scene with FLUX Fill inpainting");
 
       const startRes = await fetch(
-        "https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions",
+        "https://api.replicate.com/v1/models/black-forest-labs/flux-fill-dev/predictions",
         {
           method: "POST",
           headers: {
@@ -76,27 +105,27 @@ export const imagePipelineTask = task({
           },
           body: JSON.stringify({
             input: {
+              image: imageB64,
+              mask: maskB64,
               prompt: customPrompt,
               num_outputs: 1,
-              aspect_ratio: "1:1",
               output_format: "webp",
               output_quality: 90,
             },
           }),
         }
       );
-
       if (!startRes.ok) {
         throw new Error(`Replicate start error: ${await startRes.text()}`);
       }
 
       let prediction = await startRes.json();
 
-      // Poll until done (max 2 minutes)
-      const maxPolls = 48;
+      // Poll until done (max 3 minutes — Fill is slower than Schnell)
+      const maxPolls = 72;
       let polls = 0;
       while (prediction.status !== "succeeded" && prediction.status !== "failed") {
-        if (polls++ >= maxPolls) throw new Error("Replicate prediction timed out after 2 minutes");
+        if (polls++ >= maxPolls) throw new Error("Replicate prediction timed out after 3 minutes");
         await new Promise((resolve) => setTimeout(resolve, 2500));
         const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
           headers: { Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}` },
@@ -110,33 +139,20 @@ export const imagePipelineTask = task({
         throw new Error(`Replicate prediction failed: ${prediction.error}`);
       }
 
-      // 4. Download background, composite product on top, stamp EXIF
-      logger.info("Compositing product onto background scene");
+      // 5. Download result, stamp EXIF (EU AI Act compliance), upload to R2
+      logger.info("Storing generated image with EXIF metadata");
       const outputUrl = prediction.output?.[0];
       if (typeof outputUrl !== "string") throw new Error("Replicate returned no output URL");
-      const bgRes = await fetch(outputUrl);
-      if (!bgRes.ok) throw new Error(`Failed to download Replicate output: ${bgRes.status}`);
-      const bgBuffer = Buffer.from(await bgRes.arrayBuffer());
+      const generatedRes = await fetch(outputUrl);
+      if (!generatedRes.ok) throw new Error(`Failed to download Replicate output: ${generatedRes.status}`);
+      const generatedBuffer = Buffer.from(await generatedRes.arrayBuffer());
 
-      // Resize background to 1024x1024, then scale product to 70% of frame and center it
-      const SIZE = 1024;
-      const PRODUCT_SIZE = Math.round(SIZE * 0.70);
-
-      const background = await sharp(bgBuffer).resize(SIZE, SIZE).toBuffer();
-      const product = await sharp(bgRemovedBuffer)
-        .resize(PRODUCT_SIZE, PRODUCT_SIZE, { fit: "inside", withoutEnlargement: false })
-        .toBuffer();
-      const productMeta = await sharp(product).metadata();
-      const left = Math.round((SIZE - (productMeta.width ?? PRODUCT_SIZE)) / 2);
-      const top = Math.round((SIZE - (productMeta.height ?? PRODUCT_SIZE)) / 2);
-
-      const withExif = await sharp(background)
-        .composite([{ input: product, left, top }])
+      const withExif = await sharp(generatedBuffer)
         .withMetadata({
           exif: {
             IFD0: {
               ImageDescription: "AI-generated product photo by Fotograph",
-              Software: "Fotograph — FLUX Schnell via Replicate",
+              Software: "Fotograph — FLUX Fill Dev via Replicate",
               Artist: "Fotograph AI",
             },
           },
@@ -153,11 +169,11 @@ export const imagePipelineTask = task({
         ContentType: "image/jpeg",
       }));
 
-      // 5. Mark done, deduct one credit
-      const { userId } = (await prisma.image.findUniqueOrThrow({
+      // 6. Mark done, deduct one credit
+      const { userId } = await prisma.image.findUniqueOrThrow({
         where: { id: imageId },
         select: { userId: true },
-      }));
+      });
 
       await prisma.$transaction([
         prisma.image.update({
