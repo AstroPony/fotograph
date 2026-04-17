@@ -62,10 +62,9 @@ export const imagePipelineTask = task({
         data: { bgRemovedR2Key: bgRemovedKey, status: "GENERATING" },
       });
 
-      // 3. Scene generation via Replicate FLUX Schnell (img2img — product + scene prompt)
-      logger.info("Generating scene with FLUX Schnell");
-
-      const bgRemovedBase64 = `data:image/png;base64,${bgRemovedBuffer.toString("base64")}`;
+      // 3. Generate background scene with FLUX Schnell (text-to-image only — no img input)
+      //    Product is composited on top by Sharp in step 4.
+      logger.info("Generating background scene with FLUX Schnell");
 
       const startRes = await fetch(
         "https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions",
@@ -78,8 +77,6 @@ export const imagePipelineTask = task({
           body: JSON.stringify({
             input: {
               prompt: customPrompt,
-              image: bgRemovedBase64,
-              prompt_strength: 0.85,
               num_outputs: 1,
               aspect_ratio: "1:1",
               output_format: "webp",
@@ -113,15 +110,28 @@ export const imagePipelineTask = task({
         throw new Error(`Replicate prediction failed: ${prediction.error}`);
       }
 
-      // 4. Download output, stamp EXIF (EU AI Act compliance), upload to R2
-      logger.info("Storing generated image with EXIF metadata");
+      // 4. Download background, composite product on top, stamp EXIF
+      logger.info("Compositing product onto background scene");
       const outputUrl = prediction.output?.[0];
       if (typeof outputUrl !== "string") throw new Error("Replicate returned no output URL");
-      const generatedRes = await fetch(outputUrl);
-      if (!generatedRes.ok) throw new Error(`Failed to download Replicate output: ${generatedRes.status}`);
-      const generatedBuffer = Buffer.from(await generatedRes.arrayBuffer());
+      const bgRes = await fetch(outputUrl);
+      if (!bgRes.ok) throw new Error(`Failed to download Replicate output: ${bgRes.status}`);
+      const bgBuffer = Buffer.from(await bgRes.arrayBuffer());
 
-      const withExif = await sharp(generatedBuffer)
+      // Resize background to 1024x1024, then scale product to 70% of frame and center it
+      const SIZE = 1024;
+      const PRODUCT_SIZE = Math.round(SIZE * 0.70);
+
+      const background = await sharp(bgBuffer).resize(SIZE, SIZE).toBuffer();
+      const product = await sharp(bgRemovedBuffer)
+        .resize(PRODUCT_SIZE, PRODUCT_SIZE, { fit: "inside", withoutEnlargement: false })
+        .toBuffer();
+      const productMeta = await sharp(product).metadata();
+      const left = Math.round((SIZE - (productMeta.width ?? PRODUCT_SIZE)) / 2);
+      const top = Math.round((SIZE - (productMeta.height ?? PRODUCT_SIZE)) / 2);
+
+      const withExif = await sharp(background)
+        .composite([{ input: product, left, top }])
         .withMetadata({
           exif: {
             IFD0: {
