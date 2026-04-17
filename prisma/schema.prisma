@@ -1,13 +1,70 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  supabaseId   String        @unique
+  email        String        @unique
+  tier         Tier          @default(FREE)
+  creditsLeft  Int           @default(10)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  images       Image[]
+  brandPresets BrandPreset[]
+}
+
+model Image {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status         JobStatus    @default(PENDING)
+  rawR2Key       String
+  bgRemovedR2Key String?
+  previewR2Keys  String[]
+  finalR2Key     String?
+  sceneTheme     String?
+  customPrompt   String?
+  brandPresetId  String?
+  brandPreset    BrandPreset? @relation(fields: [brandPresetId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([userId])
+}
+
+model BrandPreset {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  lightingDir  String?
+  colorPalette String?
+  cameraAngle  String?
+  sceneType    String?
+  images       Image[]
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+}
+
+enum Tier {
+  FREE
+  STARTER
+  PRO
+  BUSINESS
+}
+
+enum JobStatus {
+  PENDING
+  REMOVING_BG
+  GENERATING
+  UPSCALING
+  DONE
+  FAILED
 }
