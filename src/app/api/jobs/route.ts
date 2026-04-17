@@ -31,12 +31,18 @@ export async function POST(request: NextRequest) {
     data: { sceneTheme, customPrompt },
   });
 
-  await tasks.trigger("image-pipeline", {
-    imageId,
-    rawR2Key: image.rawR2Key,
-    sceneTheme: sceneTheme ?? "minimalist-studio",
-    customPrompt: customPrompt ?? "product on a minimalist white studio background, soft box lighting, professional e-commerce photography",
-  });
+  try {
+    await tasks.trigger("image-pipeline", {
+      imageId,
+      rawR2Key: image.rawR2Key,
+      sceneTheme: sceneTheme ?? "minimalist-studio",
+      customPrompt: customPrompt ?? "product on a minimalist white studio background, soft box lighting, professional e-commerce photography",
+    });
+  } catch (err) {
+    await prisma.image.update({ where: { id: imageId }, data: { status: "FAILED" } });
+    console.error("Failed to dispatch pipeline task", err);
+    return NextResponse.json({ error: "Verwerking starten mislukt" }, { status: 500 });
+  }
 
   return NextResponse.json({ imageId, status: "PENDING" });
 }

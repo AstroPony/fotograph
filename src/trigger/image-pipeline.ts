@@ -86,14 +86,17 @@ export const imagePipelineTask = task({
 
       let prediction = await startRes.json();
 
-      // Poll until done
+      // Poll until done (max 2 minutes)
+      const maxPolls = 48;
+      let polls = 0;
       while (prediction.status !== "succeeded" && prediction.status !== "failed") {
+        if (polls++ >= maxPolls) throw new Error("Replicate prediction timed out after 2 minutes");
         await new Promise((r) => setTimeout(r, 2500));
         const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
           headers: { Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}` },
         });
         prediction = await pollRes.json();
-        logger.info("Prediction status", { status: prediction.status });
+        logger.info("Prediction status", { status: prediction.status, polls });
       }
 
       if (prediction.status === "failed") {
