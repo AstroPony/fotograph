@@ -62,8 +62,10 @@ export const imagePipelineTask = task({
         data: { bgRemovedR2Key: bgRemovedKey, status: "GENERATING" },
       });
 
-      // 3. Scene generation via Replicate FLUX Schnell (dev default — never use Pro locally)
+      // 3. Scene generation via Replicate FLUX Schnell (img2img — product + scene prompt)
       logger.info("Generating scene with FLUX Schnell");
+
+      const bgRemovedBase64 = `data:image/png;base64,${bgRemovedBuffer.toString("base64")}`;
 
       const startRes = await fetch(
         "https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions",
@@ -76,6 +78,8 @@ export const imagePipelineTask = task({
           body: JSON.stringify({
             input: {
               prompt: customPrompt,
+              image: bgRemovedBase64,
+              prompt_strength: 0.85,
               num_outputs: 1,
               aspect_ratio: "1:1",
               output_format: "webp",
