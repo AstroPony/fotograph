@@ -20,6 +20,8 @@ export const imagePipelineTask = task({
     const { imageId, rawR2Key, customPrompt } = payload;
 
     if (!BUCKET) throw new Error("CLOUDFLARE_R2_BUCKET_NAME is not set");
+    if (!process.env.PHOTOROOM_API_KEY) throw new Error("PHOTOROOM_API_KEY is not set");
+    if (!process.env.REPLICATE_API_TOKEN) throw new Error("REPLICATE_API_TOKEN is not set");
 
     try {
       // 1. Download raw image from R2
@@ -112,6 +114,7 @@ export const imagePipelineTask = task({
       const outputUrl = prediction.output?.[0];
       if (typeof outputUrl !== "string") throw new Error("Replicate returned no output URL");
       const generatedRes = await fetch(outputUrl);
+      if (!generatedRes.ok) throw new Error(`Failed to download Replicate output: ${generatedRes.status}`);
       const generatedBuffer = Buffer.from(await generatedRes.arrayBuffer());
 
       const withExif = await sharp(generatedBuffer)
