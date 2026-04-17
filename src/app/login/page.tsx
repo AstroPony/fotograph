@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { toast } from "sonner";
 
 const supabase = createClient();
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -39,6 +39,35 @@ export default function LoginPage() {
     }
   }
 
+  if (sent) {
+    return (
+      <div className="text-center space-y-2">
+        <p className="font-medium text-gray-800">Check je inbox!</p>
+        <p className="text-sm text-gray-500">
+          We hebben een inloglink gestuurd naar <strong>{email}</strong>.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <Input
+        type="email"
+        placeholder="jouw@email.nl"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        required
+        autoFocus
+      />
+      <Button type="submit" className="w-full" disabled={loading}>
+        {loading ? "Versturen..." : "Stuur magische link"}
+      </Button>
+    </form>
+  );
+}
+
+export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
       <Card className="w-full max-w-sm">
@@ -49,28 +78,9 @@ export default function LoginPage() {
           </p>
         </CardHeader>
         <CardContent>
-          {sent ? (
-            <div className="text-center space-y-2">
-              <p className="font-medium text-gray-800">Check je inbox!</p>
-              <p className="text-sm text-gray-500">
-                We hebben een inloglink gestuurd naar <strong>{email}</strong>.
-              </p>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <Input
-                type="email"
-                placeholder="jouw@email.nl"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoFocus
-              />
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Versturen..." : "Stuur magische link"}
-              </Button>
-            </form>
-          )}
+          <Suspense>
+            <LoginForm />
+          </Suspense>
         </CardContent>
       </Card>
     </div>
