@@ -5,8 +5,7 @@ import { prisma } from "@/lib/prisma";
 import sharp from "sharp";
 import { randomUUID } from "crypto";
 
-const BUCKET = process.env.CLOUDFLARE_R2_BUCKET_NAME!;
-if (!BUCKET) throw new Error("CLOUDFLARE_R2_BUCKET_NAME is not set");
+const BUCKET = process.env.CLOUDFLARE_R2_BUCKET_NAME;
 
 export const imagePipelineTask = task({
   id: "image-pipeline",
@@ -19,6 +18,8 @@ export const imagePipelineTask = task({
     customPrompt: string;
   }) => {
     const { imageId, rawR2Key, customPrompt } = payload;
+
+    if (!BUCKET) throw new Error("CLOUDFLARE_R2_BUCKET_NAME is not set");
 
     try {
       // 1. Download raw image from R2
