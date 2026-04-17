@@ -70,9 +70,12 @@ export async function GET(request: NextRequest) {
   }
 
   // Convert R2 keys to presigned download URLs
-  const previewUrls = await Promise.all(
+  const settled = await Promise.allSettled(
     image.previewR2Keys.map((key) => getDownloadUrl(key))
   );
+  const previewUrls = settled
+    .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+    .map((r) => r.value);
 
   return NextResponse.json({ ...image, previewUrls });
 }

@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getUploadUrl } from "@/lib/r2";
 import { randomUUID } from "crypto";
 
+export const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"] as const;
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -16,6 +18,10 @@ export async function POST(request: NextRequest) {
 
   if (!contentType || !filename) {
     return NextResponse.json({ error: "contentType and filename required" }, { status: 400 });
+  }
+
+  if (!ALLOWED_MIME_TYPES.includes(contentType)) {
+    return NextResponse.json({ error: "Bestandstype niet toegestaan (gebruik JPG, PNG of WEBP)" }, { status: 415 });
   }
 
   // Upsert user record

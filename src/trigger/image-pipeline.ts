@@ -6,6 +6,7 @@ import sharp from "sharp";
 import { randomUUID } from "crypto";
 
 const BUCKET = process.env.CLOUDFLARE_R2_BUCKET_NAME!;
+if (!BUCKET) throw new Error("CLOUDFLARE_R2_BUCKET_NAME is not set");
 
 export const imagePipelineTask = task({
   id: "image-pipeline",
@@ -23,7 +24,8 @@ export const imagePipelineTask = task({
       // 1. Download raw image from R2
       logger.info("Downloading raw image", { rawR2Key });
       const rawObj = await r2.send(new GetObjectCommand({ Bucket: BUCKET, Key: rawR2Key }));
-      const rawBuffer = Buffer.from(await rawObj.Body!.transformToByteArray());
+      if (!rawObj.Body) throw new Error(`R2 object body missing for key: ${rawR2Key}`);
+      const rawBuffer = Buffer.from(await rawObj.Body.transformToByteArray());
 
       // 2. Background removal via Photoroom
       logger.info("Removing background");
@@ -91,10 +93,11 @@ export const imagePipelineTask = task({
       let polls = 0;
       while (prediction.status !== "succeeded" && prediction.status !== "failed") {
         if (polls++ >= maxPolls) throw new Error("Replicate prediction timed out after 2 minutes");
-        await new Promise((r) => setTimeout(r, 2500));
+        await new Promise((resolve) => setTimeout(resolve, 2500));
         const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
           headers: { Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}` },
         });
+        if (!pollRes.ok) throw new Error(`Replicate poll error ${pollRes.status}`);
         prediction = await pollRes.json();
         logger.info("Prediction status", { status: prediction.status, polls });
       }
@@ -105,7 +108,9 @@ export const imagePipelineTask = task({
 
       // 4. Download output, stamp EXIF (EU AI Act compliance), upload to R2
       logger.info("Storing generated image with EXIF metadata");
-      const generatedRes = await fetch(prediction.output[0] as string);
+      const outputUrl = prediction.output?.[0];
+      if (typeof outputUrl !== "string") throw new Error("Replicate returned no output URL");
+      const generatedRes = await fetch(outputUrl);
       const generatedBuffer = Buffer.from(await generatedRes.arrayBuffer());
 
       const withExif = await sharp(generatedBuffer)
