@@ -111,13 +111,27 @@ export default function UploadPage() {
   );
 
   async function pollStatus(id: string) {
+    const TIMEOUT_MS = 3 * 60 * 1000;
+    const startedAt = Date.now();
+
     const poll = setInterval(async () => {
+      if (Date.now() - startedAt > TIMEOUT_MS) {
+        clearInterval(poll);
+        setStage("error");
+        toast.error("Verwerking duurt te lang. Probeer opnieuw.");
+        return;
+      }
+
       const res = await fetch(`/api/jobs?imageId=${id}`);
       if (!res.ok) return;
 
       const data = await res.json();
 
-      if (data.status === "DONE") {
+      if (data.status === "REMOVING_BG") {
+        setStage("removing-bg");
+      } else if (data.status === "GENERATING" || data.status === "UPSCALING") {
+        setStage("generating");
+      } else if (data.status === "DONE") {
         clearInterval(poll);
         setPreviewUrls(data.previewUrls ?? []);
         setStage("done");
