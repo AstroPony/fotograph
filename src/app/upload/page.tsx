@@ -1,53 +1,42 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
+import { SCENE_THEMES } from "@/lib/scenes";
 
-type Stage =
-  | "idle"
-  | "uploading"
-  | "removing-bg"
-  | "generating"
-  | "done"
-  | "error";
+type SceneTheme = typeof SCENE_THEMES[number];
+
+type Stage = "idle" | "uploading" | "removing-bg" | "generating" | "done" | "error";
 
 const STAGE_LABELS: Record<Stage, string> = {
-  idle: "Upload een productfoto",
+  idle: "Wacht op foto",
   uploading: "Uploaden...",
   "removing-bg": "Achtergrond verwijderen...",
   generating: "Scène genereren...",
-  done: "Klaar!",
-  error: "Er ging iets mis",
+  done: "Klaar",
+  error: "Mislukt",
 };
 
 const STAGE_PROGRESS: Record<Stage, number> = {
   idle: 0,
-  uploading: 20,
-  "removing-bg": 50,
-  generating: 80,
-  done: 100,
+  uploading: 1,
+  "removing-bg": 2,
+  generating: 3,
+  done: 4,
   error: 0,
 };
 
-// Preset scenes for Phase 1 (15 in Phase 2)
-const SCENE_THEMES = [
-  { id: "marble-counter", label: "Marmeren aanrechtblad", prompt: "product on a clean marble kitchen countertop, soft natural light, professional product photography" },
-  { id: "minimalist-studio", label: "Minimalistisch studio", prompt: "product on a minimalist white studio background, soft box lighting, professional e-commerce photography" },
-  { id: "wooden-shelf", label: "Houten plank", prompt: "product on a rustic wooden shelf, warm ambient light, lifestyle product photography" },
-  { id: "outdoor-garden", label: "Buitentuin", prompt: "product in a lush outdoor garden setting, natural daylight, lifestyle photography" },
-  { id: "flat-lay", label: "Flat lay", prompt: "product in a flat lay arrangement on a neutral linen surface, top-down view, clean minimal styling" },
-];
+const STEPS = ["Foto", "Scène", "Genereren"];
 
 export default function UploadPage() {
   const [stage, setStage] = useState<Stage>("idle");
-  const [imageId, setImageId] = useState<string | null>(null);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
-  const [selectedTheme, setSelectedTheme] = useState(SCENE_THEMES[0]);
+  const [selectedTheme, setSelectedTheme] = useState<SceneTheme>(SCENE_THEMES[0]);
   const [dragOver, setDragOver] = useState(false);
+  const [previewFile, setPreviewFile] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -60,10 +49,11 @@ export default function UploadPage() {
         return;
       }
 
+      setPreviewFile(URL.createObjectURL(file));
+
       try {
         setStage("uploading");
 
-        // 1. Get presigned upload URL
         const res = await fetch("/api/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -76,16 +66,13 @@ export default function UploadPage() {
         }
 
         const { uploadUrl, imageId: id } = await res.json();
-        setImageId(id);
 
-        // 2. Upload directly to R2
         await fetch(uploadUrl, {
           method: "PUT",
           body: file,
           headers: { "Content-Type": file.type },
         });
 
-        // 3. Start pipeline job
         setStage("removing-bg");
         const jobRes = await fetch("/api/jobs", {
           method: "POST",
@@ -99,7 +86,6 @@ export default function UploadPage() {
 
         if (!jobRes.ok) throw new Error("Verwerking starten mislukt");
 
-        // 4. Poll for completion
         setStage("generating");
         pollStatus(id);
       } catch (err) {
@@ -110,13 +96,13 @@ export default function UploadPage() {
     [selectedTheme]
   );
 
-  async function pollStatus(id: string) {
+  function pollStatus(id: string) {
     const TIMEOUT_MS = 3 * 60 * 1000;
     const startedAt = Date.now();
 
-    const poll = setInterval(async () => {
+    pollRef.current = setInterval(async () => {
       if (Date.now() - startedAt > TIMEOUT_MS) {
-        clearInterval(poll);
+        clearInterval(pollRef.current!);
         setStage("error");
         toast.error("Verwerking duurt te lang. Probeer opnieuw.");
         return;
@@ -132,12 +118,12 @@ export default function UploadPage() {
       } else if (data.status === "GENERATING" || data.status === "UPSCALING") {
         setStage("generating");
       } else if (data.status === "DONE") {
-        clearInterval(poll);
+        clearInterval(pollRef.current!);
         setPreviewUrls(data.previewUrls ?? []);
         setStage("done");
         toast.success("Foto's zijn klaar!");
       } else if (data.status === "FAILED") {
-        clearInterval(poll);
+        clearInterval(pollRef.current!);
         setStage("error");
         toast.error("Genereren mislukt. Probeer opnieuw.");
       }
@@ -154,125 +140,152 @@ export default function UploadPage() {
     [handleFile]
   );
 
-  const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleFile(file);
-  };
+  const isProcessing = stage === "uploading" || stage === "removing-bg" || stage === "generating";
+  const currentStep = STAGE_PROGRESS[stage];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Fotograph</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            AI productfotografie voor Bol.com &amp; webshops
-          </p>
+    <div className="min-h-screen flex flex-col">
+      <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-10">
+        {/* Page header */}
+        <div className="border-b-4 border-black pb-4 mb-10">
+          <p className="text-xs uppercase tracking-widest font-medium mb-1">Fotograph — Nieuwe foto</p>
+          <h1 className="font-serif font-black text-5xl uppercase leading-none tracking-tight">
+            Foto genereren
+          </h1>
         </div>
 
-        {/* Scene theme selector */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Kies een scène</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            {SCENE_THEMES.map((theme) => (
-              <button
-                key={theme.id}
-                onClick={() => setSelectedTheme(theme)}
-                className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
-                  selectedTheme.id === theme.id
-                    ? "bg-gray-900 text-white border-gray-900"
-                    : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+        {/* Step indicators */}
+        <div className="flex items-center gap-0 mb-10 border border-black">
+          {STEPS.map((step, i) => {
+            const stepNum = i + 1;
+            const active = currentStep === stepNum;
+            const done = currentStep > stepNum || stage === "done";
+            return (
+              <div
+                key={step}
+                className={`flex-1 px-4 py-3 text-xs uppercase tracking-widest font-medium border-r border-black last:border-r-0 flex items-center gap-2 ${
+                  active ? "bg-black text-white" : done ? "bg-black/10 text-black/50" : "text-black/30"
                 }`}
               >
-                {theme.label}
-              </button>
-            ))}
-          </CardContent>
-        </Card>
+                <span className={`w-5 h-5 flex items-center justify-center text-[10px] border ${active ? "border-white" : "border-current"}`}>
+                  {done ? "✓" : stepNum}
+                </span>
+                {step}
+              </div>
+            );
+          })}
+        </div>
 
-        {/* Upload area */}
-        <Card>
-          <CardContent className="pt-6">
+        <div className="grid md:grid-cols-2 gap-px bg-black">
+          {/* Left — upload + preview */}
+          <div className="bg-white p-6 flex flex-col gap-4">
+            <h2 className="text-xs uppercase tracking-widest font-medium border-b border-black pb-2">
+              01 — Productfoto
+            </h2>
+
             {stage === "idle" ? (
               <label
-                className={`flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
-                  dragOver
-                    ? "border-gray-900 bg-gray-100"
-                    : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
+                className={`flex flex-col items-center justify-center aspect-square border-2 border-dashed cursor-pointer transition-colors ${
+                  dragOver ? "border-black bg-black/5" : "border-black/30 hover:border-black"
                 }`}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={onDrop}
               >
-                <div className="text-center pointer-events-none">
-                  <p className="text-gray-600 font-medium">
-                    Sleep een foto hierheen
+                <div className="text-center pointer-events-none p-8">
+                  <p className="font-serif font-bold text-2xl uppercase mb-3">Sleep hier</p>
+                  <p className="text-xs uppercase tracking-widest text-black/40">
+                    of klik om te bladeren
                   </p>
-                  <p className="text-gray-400 text-sm mt-1">
-                    of klik om te bladeren · JPG, PNG, WEBP · max 20MB
-                  </p>
+                  <p className="text-xs text-black/30 mt-2">JPG · PNG · WEBP · max 20MB</p>
                 </div>
-                <input
-                  type="file"
-                  className="hidden"
-                  accept="image/*"
-                  onChange={onInputChange}
-                />
+                <input type="file" className="hidden" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
               </label>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700">
-                    {STAGE_LABELS[stage]}
-                  </span>
-                  <Badge variant={stage === "done" ? "default" : stage === "error" ? "destructive" : "secondary"}>
-                    {stage}
-                  </Badge>
-                </div>
-                {stage !== "error" && (
-                  <Progress value={STAGE_PROGRESS[stage]} className="h-2" />
-                )}
-                {stage === "error" && (
-                  <Button variant="outline" onClick={() => setStage("idle")}>
-                    Opnieuw proberen
-                  </Button>
+            ) : previewFile ? (
+              <div className="relative aspect-square">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={previewFile} alt="Origineel" className="w-full h-full object-contain border border-black/10" />
+                {isProcessing && (
+                  <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center gap-3">
+                    <p className="text-xs uppercase tracking-widest font-medium animate-pulse">
+                      {STAGE_LABELS[stage]}
+                    </p>
+                    {/* Progress bar */}
+                    <div className="w-32 h-px bg-black/10 relative overflow-hidden">
+                      <div className="absolute inset-y-0 left-0 bg-black animate-[progress_1.5s_ease-in-out_infinite]" style={{ width: "40%" }} />
+                    </div>
+                  </div>
                 )}
               </div>
-            )}
-          </CardContent>
-        </Card>
+            ) : null}
 
-        {/* Results */}
-        {previewUrls.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Gegenereerde foto&apos;s</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-3">
-              {previewUrls.map((url, i) => (
-                <div key={i} className="relative group">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={url}
-                    alt={`Preview ${i + 1}`}
-                    className="w-full aspect-square object-cover rounded-lg"
-                  />
-                  <a
-                    href={url}
-                    download
-                    className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg"
+            {stage === "error" && (
+              <button
+                onClick={() => { setStage("idle"); setPreviewFile(null); }}
+                className="border border-black px-4 py-2 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors"
+              >
+                Opnieuw proberen
+              </button>
+            )}
+          </div>
+
+          {/* Right — scene + result */}
+          <div className="bg-white p-6 flex flex-col gap-6">
+            {/* Scene selector */}
+            <div>
+              <h2 className="text-xs uppercase tracking-widest font-medium border-b border-black pb-2 mb-4">
+                02 — Scène
+              </h2>
+              <div className="flex flex-col gap-px bg-black/10">
+                {SCENE_THEMES.map((theme) => (
+                  <button
+                    key={theme.id}
+                    onClick={() => !isProcessing && setSelectedTheme(theme)}
+                    disabled={isProcessing}
+                    className={`px-4 py-2.5 text-left text-xs uppercase tracking-widest font-medium transition-colors ${
+                      selectedTheme.id === theme.id
+                        ? "bg-black text-white"
+                        : "bg-white hover:bg-black/5 disabled:opacity-40"
+                    }`}
                   >
-                    <span className="text-white text-sm font-medium">
-                      Downloaden
-                    </span>
-                  </a>
+                    {theme.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Result */}
+            {stage === "done" && previewUrls.length > 0 && (
+              <div>
+                <h2 className="text-xs uppercase tracking-widest font-medium border-b border-black pb-2 mb-4">
+                  03 — Resultaat
+                </h2>
+                <div className="grid grid-cols-1 gap-px bg-black">
+                  {previewUrls.map((url, i) => (
+                    <div key={i} className="relative group">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt={`Gegenereerd ${i + 1}`} className="w-full aspect-square object-cover" />
+                      <a
+                        href={url}
+                        download
+                        className="absolute inset-x-0 bottom-0 bg-black text-white text-xs uppercase tracking-widest font-medium py-2 text-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        Downloaden
+                      </a>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-      </div>
+                <button
+                  onClick={() => { setStage("idle"); setPreviewFile(null); setPreviewUrls([]); }}
+                  className="mt-4 w-full border border-black px-4 py-2 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors"
+                >
+                  Nog een foto
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
