@@ -13,8 +13,9 @@ const PHOTOROOM_MONTHLY_LIMIT = 1000;
 const ALERT_THRESHOLDS = [0.70, 0.85, 0.95];
 
 const BUCKET = process.env.CLOUDFLARE_R2_BUCKET_NAME;
-const SIZE = 1024;
-const PRODUCT_MAX = Math.round(SIZE * 0.70);
+const SIZE = 1024;          // FLUX Fill working resolution
+const OUTPUT_SIZE = 1200;   // Bol.com minimum (1200×1200px for zoom)
+const PRODUCT_MAX = Math.round(SIZE * 0.58); // ~594px — leaves generous scene room
 
 export const imagePipelineTask = task({
   id: "image-pipeline",
@@ -93,40 +94,49 @@ export const imagePipelineTask = task({
       }
 
       // 3. Prepare image + mask for FLUX Fill inpainting
-      //    - Center product (transparent PNG) on a 1024x1024 RGBA canvas
-      //    - Derive mask from alpha: white=generate background, black=keep product
       logger.info("Preparing inpainting canvas and mask");
 
+      // Resize product to fit within PRODUCT_MAX×PRODUCT_MAX, preserve aspect ratio
       const productFit = await sharp(bgRemovedBuffer)
         .resize(PRODUCT_MAX, PRODUCT_MAX, { fit: "inside" })
+        .png()
         .toBuffer();
       const { width: pw, height: ph } = await sharp(productFit).metadata();
       const pLeft = Math.round((SIZE - pw!) / 2);
       const pTop = Math.round((SIZE - ph!) / 2);
 
-      // Product centered on transparent canvas (alpha=0 background)
-      const canvas = await sharp({
-        create: { width: SIZE, height: SIZE, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 0 } },
+      // FLUX Fill requires a flat RGB image (no alpha channel).
+      // Transparent pixels become neutral gray — a color that doesn't bias generation.
+      const canvasRGB = await sharp({
+        create: { width: SIZE, height: SIZE, channels: 3, background: { r: 128, g: 128, b: 128 } },
       })
         .composite([{ input: productFit, left: pLeft, top: pTop }])
         .png()
         .toBuffer();
 
-      // Mask: binary threshold → dilate product zone 1px → negate
-      // Photoroom returns feathered (semi-transparent) edges. Without threshold(),
-      // those partial alpha values become partial mask values and FLUX Fill bleeds
-      // background generation over the product edges. threshold(128) forces a hard
-      // binary boundary; dilate() grows the "keep product" region by ~1px so FLUX
-      // never touches the outermost product pixels.
-      const mask = await sharp(canvas)
-        .extractChannel("alpha")   // product=255, background=0
-        .threshold(128)            // binary: partial-alpha edges → fully product
-        .dilate()                  // expand product zone 1px (3×3 kernel)
-        .negate()                  // product=0 (keep), background=255 (generate)
+      // Build mask from the transparent PNG (RGBA) separately:
+      //   1. Extract alpha — product=255, background=0
+      //   2. threshold(128) — binary edge: eliminates Photoroom's feathered semi-transparent pixels
+      //   3. negate — product=0 (keep), background=255 (generate)
+      //   4. dilate AFTER negate — expands the generate-background zone ~2px into product boundary
+      //      so FLUX fills right up to and slightly under the product edge; the clean product
+      //      is composited back on top in step 5, giving pixel-perfect edges regardless of FLUX.
+      const productAlpha = await sharp({
+        create: { width: SIZE, height: SIZE, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+      })
+        .composite([{ input: productFit, left: pLeft, top: pTop }])
         .png()
         .toBuffer();
 
-      const imageB64 = `data:image/png;base64,${canvas.toString("base64")}`;
+      const mask = await sharp(productAlpha)
+        .extractChannel("alpha")
+        .threshold(128)
+        .negate()
+        .dilate()
+        .png()
+        .toBuffer();
+
+      const imageB64 = `data:image/png;base64,${canvasRGB.toString("base64")}`;
       const maskB64 = `data:image/png;base64,${mask.toString("base64")}`;
 
       // 4. FLUX Fill inpainting — generates the scene around the product naturally
@@ -178,7 +188,7 @@ export const imagePipelineTask = task({
         throw new Error(`Replicate prediction failed: ${prediction.error}`);
       }
 
-      // 5. Download result, stamp EXIF (EU AI Act compliance), upload to R2
+      // 5. Download result, composite clean product back on top, upscale, stamp EXIF
       logger.info("Storing generated image with EXIF metadata");
       const outputUrl = prediction.output?.[0];
       if (typeof outputUrl !== "string") throw new Error("Replicate returned no output URL");
@@ -186,7 +196,16 @@ export const imagePipelineTask = task({
       if (!generatedRes.ok) throw new Error(`Failed to download Replicate output: ${generatedRes.status}`);
       const generatedBuffer = Buffer.from(await generatedRes.arrayBuffer());
 
-      const withExif = await sharp(generatedBuffer)
+      // Composite the original clean Photoroom cutout back over FLUX's output.
+      // FLUX may have slightly touched product-edge pixels despite the mask — this
+      // overwrites those pixels with the exact product from Photoroom, guaranteeing
+      // pixel-perfect edges. Then upscale to OUTPUT_SIZE (1200px) for Bol.com compliance.
+      const composited = await sharp(generatedBuffer)
+        .composite([{ input: productFit, left: pLeft, top: pTop, blend: "over" }])
+        .resize(OUTPUT_SIZE, OUTPUT_SIZE, { fit: "fill" })
+        .toBuffer();
+
+      const withExif = await sharp(composited)
         .withMetadata({
           exif: {
             IFD0: {
