@@ -3,8 +3,11 @@ import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { r2 } from "@/lib/r2";
 import { prisma } from "@/lib/prisma";
 import { sendUsageAlert } from "@/lib/resend";
+import { SCENE_THEMES } from "@/lib/scenes";
 import sharp from "sharp";
 import { randomUUID } from "crypto";
+
+const SCENE_PROMPTS = Object.fromEntries(SCENE_THEMES.map((t) => [t.id, t.prompt]));
 
 const PHOTOROOM_MONTHLY_LIMIT = 1000;
 const ALERT_THRESHOLDS = [0.70, 0.85, 0.95];
@@ -23,7 +26,13 @@ export const imagePipelineTask = task({
     sceneTheme: string;
     customPrompt: string;
   }) => {
-    const { imageId, rawR2Key, customPrompt } = payload;
+    const { imageId, rawR2Key, sceneTheme, customPrompt } = payload;
+
+    // Build final prompt: scene template + optional user addition
+    const sceneBase = SCENE_PROMPTS[sceneTheme] ?? "";
+    const finalPrompt = customPrompt
+      ? `${sceneBase} ${customPrompt}`.trim()
+      : sceneBase;
 
     if (!BUCKET) throw new Error("CLOUDFLARE_R2_BUCKET_NAME is not set");
     if (!process.env.PHOTOROOM_API_KEY) throw new Error("PHOTOROOM_API_KEY is not set");
@@ -128,7 +137,9 @@ export const imagePipelineTask = task({
             input: {
               image: imageB64,
               mask: maskB64,
-              prompt: customPrompt,
+              prompt: finalPrompt,
+              guidance: 30,
+              num_inference_steps: 28,
               num_outputs: 1,
               output_format: "webp",
               output_quality: 90,
