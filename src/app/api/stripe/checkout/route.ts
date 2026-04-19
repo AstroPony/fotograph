@@ -28,20 +28,29 @@ export async function POST(request: NextRequest) {
     await prisma.user.update({ where: { id: dbUser.id }, data: { mollieCustomerId: stripeCustomerId } });
   }
 
-  const session = await stripe.checkout.sessions.create({
-    customer: stripeCustomerId,
-    mode: productConfig.mode,
-    payment_method_types: ["ideal", "card"],
-    locale: "nl",
-    line_items: [{ price: PRICE_IDS[product], quantity: 1 }],
-    payment_intent_data: productConfig.mode === "payment" ? { statement_descriptor: "Fotograph" } : undefined,
-    subscription_data: productConfig.mode === "subscription"
-      ? { metadata: { userId: dbUser.id, product }, description: "Fotograph" }
-      : undefined,
-    success_url: `${baseUrl}/upgrade?status=success&product=${product}`,
-    cancel_url: `${baseUrl}/upgrade`,
-    metadata: { userId: dbUser.id, product },
-  });
+  let session;
+  try {
+    session = await stripe.checkout.sessions.create({
+      customer: stripeCustomerId,
+      mode: productConfig.mode,
+      payment_method_types: ["ideal", "card"],
+      locale: "nl",
+      line_items: [{ price: PRICE_IDS[product], quantity: 1 }],
+      payment_intent_data: productConfig.mode === "payment"
+        ? { statement_descriptor_suffix: "Fotograph" }
+        : undefined,
+      subscription_data: productConfig.mode === "subscription"
+        ? { metadata: { userId: dbUser.id, product } }
+        : undefined,
+      success_url: `${baseUrl}/upgrade?status=success&product=${product}`,
+      cancel_url: `${baseUrl}/upgrade`,
+      metadata: { userId: dbUser.id, product },
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[stripe/checkout]", message);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 
   await prisma.molliePayment.create({
     data: {
