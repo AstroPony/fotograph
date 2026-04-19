@@ -96,17 +96,18 @@ export const imagePipelineTask = task({
       // 3. Prepare image + mask for FLUX Fill inpainting
       logger.info("Preparing inpainting canvas and mask");
 
-      // Resize product to fit within PRODUCT_MAX×PRODUCT_MAX, preserve aspect ratio
+      // Resize product, always ensure RGBA so alpha extraction is reliable
       const productFit = await sharp(bgRemovedBuffer)
         .resize(PRODUCT_MAX, PRODUCT_MAX, { fit: "inside" })
+        .ensureAlpha()
         .png()
         .toBuffer();
       const { width: pw, height: ph } = await sharp(productFit).metadata();
       const pLeft = Math.round((SIZE - pw!) / 2);
       const pTop = Math.round((SIZE - ph!) / 2);
 
-      // FLUX Fill requires a flat RGB image (no alpha channel).
-      // Transparent pixels become neutral gray — a color that doesn't bias generation.
+      // Canvas: flat RGB (no alpha) — FLUX Fill requires RGB, not RGBA.
+      // Gray background is neutral and doesn't bias scene generation.
       const canvasRGB = await sharp({
         create: { width: SIZE, height: SIZE, channels: 3, background: { r: 128, g: 128, b: 128 } },
       })
@@ -114,25 +115,23 @@ export const imagePipelineTask = task({
         .png()
         .toBuffer();
 
-      // Build mask from the transparent PNG (RGBA) separately:
-      //   1. Extract alpha — product=255, background=0
-      //   2. threshold(128) — binary edge: eliminates Photoroom's feathered semi-transparent pixels
-      //   3. negate — product=0 (keep), background=255 (generate)
-      //   4. dilate AFTER negate — expands the generate-background zone ~2px into product boundary
-      //      so FLUX fills right up to and slightly under the product edge; the clean product
-      //      is composited back on top in step 5, giving pixel-perfect edges regardless of FLUX.
-      const productAlpha = await sharp({
-        create: { width: SIZE, height: SIZE, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
-      })
-        .composite([{ input: productFit, left: pLeft, top: pTop }])
+      // Mask: WHITE (255) = generate background, BLACK (0) = keep product.
+      // Derived directly from productFit's alpha channel (most reliable source —
+      // avoids round-tripping through a synthetic RGBA canvas which loses alpha).
+      // threshold(128) binarises Photoroom's feathered edges.
+      // Result is placed onto a full-size white canvas so the surrounding area
+      // is white (generate), and the product footprint is black (keep).
+      const productMaskSmall = await sharp(productFit)
+        .extractChannel("alpha")  // grayscale pw×ph: product≈255, bg≈0
+        .threshold(128)            // binary
+        .negate()                  // product=0 (black=keep), bg=255 (white=generate)
         .png()
         .toBuffer();
 
-      const mask = await sharp(productAlpha)
-        .extractChannel("alpha")
-        .threshold(128)
-        .negate()
-        .dilate()
+      const mask = await sharp({
+        create: { width: SIZE, height: SIZE, channels: 3, background: { r: 255, g: 255, b: 255 } },
+      })
+        .composite([{ input: productMaskSmall, left: pLeft, top: pTop }])
         .png()
         .toBuffer();
 
@@ -156,7 +155,8 @@ export const imagePipelineTask = task({
               mask: maskB64,
               prompt: finalPrompt,
               guidance: 30,
-              num_inference_steps: 28,
+              steps: 28,        // correct param name for flux-fill-dev on Replicate
+              go_fast: false,   // disable fp8 quantization — better mask adherence
               num_outputs: 1,
               output_format: "webp",
               output_quality: 90,
