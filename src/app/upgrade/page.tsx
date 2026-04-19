@@ -15,7 +15,7 @@ export default function UpgradePage() {
   async function buy(product: ProductId) {
     setLoading(product);
     try {
-      const res = await fetch("/api/mollie/checkout", {
+      const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ product }),
