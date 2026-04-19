@@ -40,4 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# private docs — keep off the public repo
+/docs
+
 /src/generated/prisma
+
+.vercel
