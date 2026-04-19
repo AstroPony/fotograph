@@ -112,10 +112,17 @@ export const imagePipelineTask = task({
         .png()
         .toBuffer();
 
-      // Mask: extract alpha, negate → transparent areas become white (generate), product becomes black (keep)
+      // Mask: binary threshold → dilate product zone 1px → negate
+      // Photoroom returns feathered (semi-transparent) edges. Without threshold(),
+      // those partial alpha values become partial mask values and FLUX Fill bleeds
+      // background generation over the product edges. threshold(128) forces a hard
+      // binary boundary; dilate() grows the "keep product" region by ~1px so FLUX
+      // never touches the outermost product pixels.
       const mask = await sharp(canvas)
-        .extractChannel("alpha")
-        .negate()
+        .extractChannel("alpha")   // product=255, background=0
+        .threshold(128)            // binary: partial-alpha edges → fully product
+        .dilate()                  // expand product zone 1px (3×3 kernel)
+        .negate()                  // product=0 (keep), background=255 (generate)
         .png()
         .toBuffer();
 
