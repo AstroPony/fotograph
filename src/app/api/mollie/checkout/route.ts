@@ -34,12 +34,13 @@ export async function POST(request: NextRequest) {
     payment_method_types: ["ideal", "card"],
     locale: "nl",
     line_items: [{ price: PRICE_IDS[product], quantity: 1 }],
+    payment_intent_data: productConfig.mode === "payment" ? { statement_descriptor: "Fotograph" } : undefined,
+    subscription_data: productConfig.mode === "subscription"
+      ? { metadata: { userId: dbUser.id, product }, description: "Fotograph" }
+      : undefined,
     success_url: `${baseUrl}/upgrade?status=success&product=${product}`,
     cancel_url: `${baseUrl}/upgrade`,
     metadata: { userId: dbUser.id, product },
-    ...(productConfig.mode === "subscription" && {
-      subscription_data: { metadata: { userId: dbUser.id, product } },
-    }),
   });
 
   await prisma.molliePayment.create({
