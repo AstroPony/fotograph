@@ -9,15 +9,33 @@ datasource db {
 }
 
 model User {
-  id           String        @id @default(cuid())
-  supabaseId   String        @unique
-  email        String        @unique
-  tier         Tier          @default(FREE)
-  creditsLeft  Int           @default(10)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  images       Image[]
-  brandPresets BrandPreset[]
+  id                  String           @id @default(cuid())
+  supabaseId          String           @unique
+  email               String           @unique
+  tier                Tier             @default(FREE)
+  creditsLeft         Int              @default(10)
+  mollieCustomerId    String?
+  subscriptionEndsAt  DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  images              Image[]
+  brandPresets        BrandPreset[]
+  payments            MolliePayment[]
+}
+
+model MolliePayment {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mollieId  String   @unique
+  status    String
+  amount    String
+  product   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([mollieId])
 }
 
 model Image {

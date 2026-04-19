@@ -13,6 +13,8 @@ export default async function AccountPage() {
     where: { supabaseId: user.id },
     select: {
       creditsLeft: true,
+      tier: true,
+      subscriptionEndsAt: true,
       createdAt: true,
       _count: { select: { images: true } },
     },
@@ -25,15 +27,14 @@ export default async function AccountPage() {
     select: { id: true, status: true, sceneTheme: true, createdAt: true },
   });
 
+  const TIER_LABELS: Record<string, string> = {
+    FREE: "Gratis", STARTER: "Starter", PRO: "Pro", BUSINESS: "Business",
+  };
+
   const stats = [
+    { label: "Huidig plan", value: TIER_LABELS[dbUser?.tier ?? "FREE"] },
     { label: "Credits resterend", value: dbUser?.creditsLeft ?? 0 },
     { label: "Foto's gemaakt", value: dbUser?._count.images ?? 0 },
-    {
-      label: "Lid sinds",
-      value: dbUser
-        ? new Date(dbUser.createdAt).toLocaleDateString("nl-NL", { month: "long", year: "numeric" })
-        : "—",
-    },
   ];
 
   return (
@@ -68,7 +69,24 @@ export default async function AccountPage() {
               <p className="text-sm font-medium">{user.email}</p>
             </div>
 
+            {dbUser?.subscriptionEndsAt && (
+              <div className="flex flex-col gap-1">
+                <p className="text-xs uppercase tracking-widest text-black/40">Abonnement geldig tot</p>
+                <p className="text-sm font-medium">
+                  {new Date(dbUser.subscriptionEndsAt).toLocaleDateString("nl-NL", {
+                    day: "numeric", month: "long", year: "numeric",
+                  })}
+                </p>
+              </div>
+            )}
+
             <div className="flex flex-col gap-3 mt-auto pt-4 border-t border-black/10">
+              <a
+                href="/upgrade"
+                className="border border-black px-4 py-2 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors text-center"
+              >
+                Credits kopen / Upgraden
+              </a>
               <SignOutButton />
             </div>
           </div>

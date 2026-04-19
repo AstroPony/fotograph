@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { getUploadUrl } from "@/lib/r2";
+import { getUploadUrl, MAX_UPLOAD_BYTES } from "@/lib/r2";
 import { randomUUID } from "crypto";
 
 export const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"] as const;
@@ -14,14 +14,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { contentType, filename } = await request.json();
+  const { contentType, filename, fileSize } = await request.json();
 
-  if (!contentType || !filename) {
-    return NextResponse.json({ error: "contentType and filename required" }, { status: 400 });
+  if (!contentType || !filename || typeof fileSize !== "number") {
+    return NextResponse.json({ error: "contentType, filename en fileSize zijn verplicht" }, { status: 400 });
   }
 
   if (!ALLOWED_MIME_TYPES.includes(contentType)) {
     return NextResponse.json({ error: "Bestandstype niet toegestaan (gebruik JPG, PNG of WEBP)" }, { status: 415 });
+  }
+
+  if (fileSize > MAX_UPLOAD_BYTES) {
+    return NextResponse.json(
+      { error: `Bestand is te groot — maximaal ${MAX_UPLOAD_BYTES / 1024 / 1024}MB toegestaan` },
+      { status: 413 }
+    );
   }
 
   // Upsert user record
@@ -39,7 +46,7 @@ export async function POST(request: NextRequest) {
   }
 
   const key = `uploads/${user.id}/${randomUUID()}-${filename}`;
-  const uploadUrl = await getUploadUrl(key, contentType);
+  const uploadUrl = await getUploadUrl(key, contentType, fileSize);
 
   // Create image record in DB
   const image = await prisma.image.create({

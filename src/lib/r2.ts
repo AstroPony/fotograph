@@ -16,12 +16,15 @@ export const r2 = new S3Client({
 
 const BUCKET = process.env.CLOUDFLARE_R2_BUCKET_NAME!;
 
-/** Presigned URL for direct browser upload (PUT) */
-export async function getUploadUrl(key: string, contentType: string) {
+export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20 MB
+
+/** Presigned URL for direct browser upload (PUT). ContentLength is signed so R2 rejects mismatches. */
+export async function getUploadUrl(key: string, contentType: string, contentLength: number) {
   const command = new PutObjectCommand({
     Bucket: BUCKET,
     Key: key,
     ContentType: contentType,
+    ContentLength: contentLength,
   });
   return getSignedUrl(r2, command, { expiresIn: 300 }); // 5 min
 }

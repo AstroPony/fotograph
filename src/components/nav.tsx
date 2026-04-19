@@ -2,17 +2,21 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 
+const BATCH_TIERS = new Set(["PRO", "BUSINESS"]);
+
 export async function Nav() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   let credits: number | null = null;
+  let showBatch = false;
   if (user) {
     const dbUser = await prisma.user.findUnique({
       where: { supabaseId: user.id },
-      select: { creditsLeft: true },
+      select: { creditsLeft: true, tier: true },
     });
     credits = dbUser?.creditsLeft ?? 0;
+    showBatch = BATCH_TIERS.has(dbUser?.tier ?? "");
   }
 
   return (
@@ -26,9 +30,14 @@ export async function Nav() {
             <Link href="/upload" className="hover:underline underline-offset-4">
               Nieuwe foto
             </Link>
-            <span className="border border-black px-2 py-0.5">
+            {showBatch && (
+              <Link href="/upload/batch" className="hover:underline underline-offset-4">
+                Batch
+              </Link>
+            )}
+            <Link href="/upgrade" className="border border-black px-2 py-0.5 hover:bg-black hover:text-white transition-colors">
               {credits} credit{credits !== 1 ? "s" : ""}
-            </span>
+            </Link>
             <Link href="/account" className="hover:underline underline-offset-4">
               Account
             </Link>

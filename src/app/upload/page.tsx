@@ -57,7 +57,7 @@ export default function UploadPage() {
         const res = await fetch("/api/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contentType: file.type, filename: file.name }),
+          body: JSON.stringify({ contentType: file.type, filename: file.name, fileSize: file.size }),
         });
 
         if (!res.ok) {
@@ -84,7 +84,10 @@ export default function UploadPage() {
           }),
         });
 
-        if (!jobRes.ok) throw new Error("Verwerking starten mislukt");
+        if (!jobRes.ok) {
+          const err = await jobRes.json().catch(() => ({}));
+          throw new Error(err.error ?? "Verwerking starten mislukt");
+        }
 
         setStage("generating");
         pollStatus(id);
@@ -185,8 +188,8 @@ export default function UploadPage() {
 
             {stage === "idle" ? (
               <label
-                className={`flex flex-col items-center justify-center aspect-square border-2 border-dashed cursor-pointer transition-colors ${
-                  dragOver ? "border-black bg-black/5" : "border-black/30 hover:border-black"
+                className={`flex flex-col items-center justify-center aspect-square border-2 cursor-pointer transition-colors ${
+                  dragOver ? "border-black bg-black/5" : "border-black/20 hover:border-black"
                 }`}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
