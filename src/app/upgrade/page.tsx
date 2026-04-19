@@ -1,25 +1,33 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PRODUCTS, type ProductId } from "@/lib/constants";
 
 const PLAN_IDS = ["starter", "pro", "business"] as const;
 
-export default function UpgradePage() {
+function SuccessBanner() {
   const params = useSearchParams();
   const router = useRouter();
-  const [showSuccess, setShowSuccess] = useState(params.get("status") === "success");
-  const [loading, setLoading] = useState<ProductId | null>(null);
+  const [show, setShow] = useState(params.get("status") === "success");
 
   useEffect(() => {
-    if (showSuccess) {
-      router.replace("/upgrade", { scroll: false });
-    }
+    if (show) router.replace("/upgrade", { scroll: false });
     // intentionally runs once on mount to strip ?status from the URL
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  if (!show) return null;
+  return (
+    <div className="border border-black bg-black text-white px-6 py-4 mb-8 text-xs uppercase tracking-widest font-medium">
+      Betaling geslaagd — je credits zijn bijgeschreven.
+    </div>
+  );
+}
+
+export default function UpgradePage() {
+  const [loading, setLoading] = useState<ProductId | null>(null);
 
   async function buy(product: ProductId) {
     setLoading(product);
@@ -48,11 +56,9 @@ export default function UpgradePage() {
           </h1>
         </div>
 
-        {showSuccess && (
-          <div className="border border-black bg-black text-white px-6 py-4 mb-8 text-xs uppercase tracking-widest font-medium">
-            Betaling geslaagd — je credits zijn bijgeschreven.
-          </div>
-        )}
+        <Suspense>
+          <SuccessBanner />
+        </Suspense>
 
         {/* Subscription plans */}
         <section className="mb-10">
