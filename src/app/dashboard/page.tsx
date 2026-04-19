@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { getDownloadUrl } from "@/lib/r2";
 import { SCENE_LABELS, IMAGE_STATUS_LABELS } from "@/lib/scenes";
+import { DashboardPoller } from "@/components/dashboard-poller";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -34,6 +35,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <DashboardPoller hasProcessing={processing.length > 0} />
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-10">
         {/* Page header */}
         <div className="border-b-4 border-black pb-4 mb-10">

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PRODUCTS, type ProductId } from "@/lib/constants";
 
@@ -9,8 +9,17 @@ const PLAN_IDS = ["starter", "pro", "business"] as const;
 
 export default function UpgradePage() {
   const params = useSearchParams();
-  const status = params.get("status");
+  const router = useRouter();
+  const [showSuccess, setShowSuccess] = useState(params.get("status") === "success");
   const [loading, setLoading] = useState<ProductId | null>(null);
+
+  useEffect(() => {
+    if (showSuccess) {
+      router.replace("/upgrade", { scroll: false });
+    }
+    // intentionally runs once on mount to strip ?status from the URL
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function buy(product: ProductId) {
     setLoading(product);
@@ -39,7 +48,7 @@ export default function UpgradePage() {
           </h1>
         </div>
 
-        {status === "success" && (
+        {showSuccess && (
           <div className="border border-black bg-black text-white px-6 py-4 mb-8 text-xs uppercase tracking-widest font-medium">
             Betaling geslaagd — je credits zijn bijgeschreven.
           </div>
@@ -106,7 +115,7 @@ export default function UpgradePage() {
         </section>
 
         <p className="text-xs text-black/40 mt-6">
-          Betaling via iDEAL, creditcard of andere Mollie-methoden. Abonnementen worden maandelijks verlengd.
+          Betaling via iDEAL, creditcard of andere Stripe-methoden. Abonnementen worden maandelijks verlengd.
         </p>
       </main>
     </div>

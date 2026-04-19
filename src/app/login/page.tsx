@@ -79,7 +79,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex flex-col">
       {/* Masthead */}
       <header className="border-b-4 border-black">
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center">
+        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center">
           <span className="font-serif font-black text-lg tracking-tight uppercase">Fotograph</span>
         </div>
       </header>

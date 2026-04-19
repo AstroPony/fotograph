@@ -150,11 +150,14 @@ export default async function Home() {
         </section>
 
         {/* Footer */}
-        <footer className="py-8 flex items-center justify-between">
+        <footer className="py-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <span className="font-serif font-black text-sm uppercase tracking-tight">Fotograph</span>
-          <p className="text-xs text-black/40 uppercase tracking-widest">
-            AI productfotografie · Nederland · KVK-nummer volgt
-          </p>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-black/40 uppercase tracking-widest">
+            <Link href="/voorwaarden" className="hover:text-black transition-colors">Algemene Voorwaarden</Link>
+            <Link href="/privacy" className="hover:text-black transition-colors">Privacybeleid</Link>
+            <span>KVK: [volgt]</span>
+            <span>BTW: [volgt]</span>
+          </div>
         </footer>
       </main>
     </div>

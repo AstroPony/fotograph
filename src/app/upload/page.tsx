@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { SCENE_THEMES } from "@/lib/scenes";
 
@@ -300,12 +301,20 @@ export default function UploadPage() {
                     </div>
                   ))}
                 </div>
-                <button
-                  onClick={() => { setStage("idle"); setPreviewFile(null); setPreviewUrls([]); }}
-                  className="mt-4 w-full border border-black px-4 py-2 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors"
-                >
-                  Nog een foto
-                </button>
+                <div className="mt-4 flex flex-col gap-2">
+                  <button
+                    onClick={() => { setStage("idle"); setPreviewFile(null); setPreviewUrls([]); }}
+                    className="w-full border border-black px-4 py-2 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors"
+                  >
+                    Nog een foto
+                  </button>
+                  <Link
+                    href="/dashboard"
+                    className="w-full border border-black/30 px-4 py-2 text-xs uppercase tracking-widest font-medium text-black/50 hover:border-black hover:text-black transition-colors text-center"
+                  >
+                    Bekijk al je foto&apos;s →
+                  </Link>
+                </div>
               </div>
             )}
           </div>
