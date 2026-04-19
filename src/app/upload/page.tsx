@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { Suspense, useState, useCallback, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -30,7 +30,7 @@ const STAGE_PROGRESS: Record<Stage, number> = {
 
 const STEPS = ["Foto", "Scène", "Genereren"];
 
-export default function UploadPage() {
+function UploadPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [showWelcome, setShowWelcome] = useState(searchParams.get("welcome") === "1");
@@ -321,5 +321,13 @@ export default function UploadPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function UploadPage() {
+  return (
+    <Suspense>
+      <UploadPageInner />
+    </Suspense>
   );
 }
