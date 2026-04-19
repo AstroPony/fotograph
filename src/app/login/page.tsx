@@ -37,7 +37,7 @@ function LoginForm() {
   if (sent) {
     return (
       <div className="text-center space-y-4">
-        <p className="font-serif font-black text-2xl uppercase">Check je inbox</p>
+        <p className="font-serif font-black text-2xl uppercase">Controleer je inbox</p>
         <p className="text-sm text-black/60 leading-relaxed">
           We hebben een inloglink gestuurd naar<br />
           <strong>{email}</strong>

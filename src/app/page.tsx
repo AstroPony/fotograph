@@ -29,7 +29,7 @@ export default async function Home() {
           <p className="text-xs uppercase tracking-widest font-medium mb-4 text-black/50">
             AI productfotografie voor Bol.com &amp; webshops
           </p>
-          <h1 className="font-serif font-black text-6xl md:text-8xl uppercase leading-none tracking-tight mb-8">
+          <h1 className="font-serif font-black text-5xl sm:text-6xl md:text-8xl uppercase leading-none tracking-tight mb-8">
             Professionele<br />productfoto&apos;s<br />in seconden.
           </h1>
           <p className="text-base text-black/60 max-w-lg mb-10 leading-relaxed">
@@ -58,7 +58,7 @@ export default async function Home() {
             {[
               { step: "01", title: "Upload", body: "Sleep je productfoto naar Fotograph. JPG, PNG of WEBP — tot 20MB." },
               { step: "02", title: "Kies scène", body: "Kies een stijl: studio, marmeren aanrecht, houten plank, buitentuin en meer." },
-              { step: "03", title: "Download", body: "AI verwijdert de achtergrond en genereert de scène. Klaar in onder een minuut." },
+              { step: "03", title: "Download", body: "AI verwijdert de achtergrond en genereert de scène. Klaar in minder dan een minuut." },
             ].map(({ step, title, body }) => (
               <div key={step} className="bg-white p-8">
                 <p className="font-serif font-black text-4xl uppercase text-black/10 mb-4">{step}</p>
@@ -73,7 +73,7 @@ export default async function Home() {
         <section className="border-b border-black py-12">
           <div className="grid md:grid-cols-2 gap-px bg-black">
             <div className="bg-white p-8">
-              <p className="text-xs uppercase tracking-widest font-medium text-black/40 mb-4">Bol.com verkopers</p>
+              <p className="text-xs uppercase tracking-widest font-medium text-black/40 mb-4">Bol.com-verkopers</p>
               <h2 className="font-serif font-black text-3xl uppercase leading-tight mb-4">
                 Voldoe aan Bol.com&apos;s beeldvereisten
               </h2>
@@ -87,7 +87,7 @@ export default async function Home() {
             <div className="bg-black text-white p-8 flex flex-col justify-between">
               <p className="text-xs uppercase tracking-widest font-medium text-white/40 mb-4">Nederlandstalig</p>
               <p className="font-serif font-black text-3xl uppercase leading-tight">
-                De enige AI-fotografie&shy;tool met Nederlandse interface en iDEAL betaling.
+                De enige AI-fotografietool met Nederlandse interface en iDEAL-betaling.
               </p>
               <p className="text-xs uppercase tracking-widest text-white/40 mt-6">iDEAL · Bol.com · Shopify · WooCommerce</p>
             </div>
@@ -155,7 +155,7 @@ export default async function Home() {
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-black/40 uppercase tracking-widest">
             <Link href="/voorwaarden" className="hover:text-black transition-colors">Algemene Voorwaarden</Link>
             <Link href="/privacy" className="hover:text-black transition-colors">Privacybeleid</Link>
-            <span>KVK: [volgt]</span>
+            <span>KVK: 97293318</span>
             <span>BTW: [volgt]</span>
           </div>
         </footer>

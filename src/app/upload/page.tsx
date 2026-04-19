@@ -283,10 +283,10 @@ function UploadPageInner() {
                   onClick={reset}
                   className="text-xs uppercase tracking-widest text-black/40 hover:text-black underline underline-offset-4 text-left"
                 >
-                  Loskoppelen van verwerking
+                  Verbergen
                 </button>
                 <p className="text-[10px] text-black/30 uppercase tracking-widest">
-                  Generatie loopt door op de achtergrond — zie dashboard voor resultaat
+                  De verwerking loopt door op de achtergrond — bekijk het resultaat in je dashboard
                 </p>
               </div>
             )}

@@ -105,7 +105,7 @@ export function UpgradeClient({ currentTier }: { currentTier: string }) {
                         : "border-black text-black hover:bg-black hover:text-white"
                     }`}
                   >
-                    {loading === id ? "Doorsturen…" : isCurrent ? "Huidig plan" : `Kies ${name}`}
+                    {loading === id ? "Bezig…" : isCurrent ? "Huidig plan" : `Kies ${name}`}
                   </button>
                 </div>
               );
@@ -128,7 +128,7 @@ export function UpgradeClient({ currentTier }: { currentTier: string }) {
               disabled={loading !== null}
               className="border border-black px-6 py-2.5 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors disabled:opacity-50 whitespace-nowrap"
             >
-              {loading === "credits" ? "Doorsturen…" : "Koop credits"}
+              {loading === "credits" ? "Bezig…" : "Koop credits"}
             </button>
           </div>
         </section>
