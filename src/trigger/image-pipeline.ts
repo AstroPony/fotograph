@@ -2,8 +2,12 @@ import { task, logger } from "@trigger.dev/sdk";
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { r2 } from "@/lib/r2";
 import { prisma } from "@/lib/prisma";
+import { sendUsageAlert } from "@/lib/resend";
 import sharp from "sharp";
 import { randomUUID } from "crypto";
+
+const PHOTOROOM_MONTHLY_LIMIT = 1000;
+const ALERT_THRESHOLDS = [0.70, 0.85, 0.95];
 
 const BUCKET = process.env.CLOUDFLARE_R2_BUCKET_NAME;
 const SIZE = 1024;
@@ -62,6 +66,22 @@ export const imagePipelineTask = task({
         where: { id: imageId },
         data: { bgRemovedR2Key: bgRemovedKey, status: "GENERATING" },
       });
+
+      // Check monthly Photoroom usage and alert at thresholds
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+      const usedThisMonth = await prisma.image.count({
+        where: { createdAt: { gte: startOfMonth }, status: { in: ["GENERATING", "DONE"] } },
+      });
+      const usageRatio = usedThisMonth / PHOTOROOM_MONTHLY_LIMIT;
+      const crossed = ALERT_THRESHOLDS.find(
+        (t) => usageRatio >= t && (usedThisMonth - 1) / PHOTOROOM_MONTHLY_LIMIT < t
+      );
+      if (crossed) {
+        sendUsageAlert(usedThisMonth, PHOTOROOM_MONTHLY_LIMIT).catch(() => null);
+        logger.info("Usage alert sent", { usedThisMonth, threshold: crossed });
+      }
 
       // 3. Prepare image + mask for FLUX Fill inpainting
       //    - Center product (transparent PNG) on a 1024x1024 RGBA canvas
