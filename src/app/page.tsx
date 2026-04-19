@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { PRODUCTS } from "@/lib/mollie";
+import { PRODUCTS } from "@/lib/stripe";
 
 export default async function Home() {
   const supabase = await createClient();

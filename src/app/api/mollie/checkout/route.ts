@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { mollie, PRODUCTS, type ProductId } from "@/lib/mollie";
+import { stripe, PRODUCTS, type ProductId } from "@/lib/stripe";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -20,31 +20,37 @@ export async function POST(request: NextRequest) {
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? `https://${request.headers.get("host")}`;
 
-  let customerId = dbUser.mollieCustomerId;
-  if (!customerId) {
-    const customer = await mollie.customers.create({ name: dbUser.email, email: dbUser.email });
-    customerId = customer.id;
-    await prisma.user.update({ where: { id: dbUser.id }, data: { mollieCustomerId: customerId } });
+  // Reuse existing Stripe customer or create one
+  let stripeCustomerId = dbUser.mollieCustomerId; // reusing the column for Stripe customer ID
+  if (!stripeCustomerId) {
+    const customer = await stripe.customers.create({ email: dbUser.email });
+    stripeCustomerId = customer.id;
+    await prisma.user.update({ where: { id: dbUser.id }, data: { mollieCustomerId: stripeCustomerId } });
   }
 
-  const payment = await mollie.payments.create({
-    amount: { currency: "EUR", value: productConfig.amount },
-    description: productConfig.label,
-    customerId,
-    redirectUrl: `${baseUrl}/upgrade?status=success&product=${product}`,
-    webhookUrl: `${baseUrl}/api/mollie/webhook`,
+  const session = await stripe.checkout.sessions.create({
+    customer: stripeCustomerId,
+    mode: productConfig.mode,
+    payment_method_types: ["ideal", "card"],
+    locale: "nl",
+    line_items: [{ price: productConfig.priceId, quantity: 1 }],
+    success_url: `${baseUrl}/upgrade?status=success&product=${product}`,
+    cancel_url: `${baseUrl}/upgrade`,
     metadata: { userId: dbUser.id, product },
+    ...(productConfig.mode === "subscription" && {
+      subscription_data: { metadata: { userId: dbUser.id, product } },
+    }),
   });
 
   await prisma.molliePayment.create({
     data: {
       userId: dbUser.id,
-      mollieId: payment.id,
-      status: payment.status,
-      amount: productConfig.amount,
+      mollieId: session.id,
+      status: session.status ?? "open",
+      amount: String(productConfig.amount),
       product,
     },
   });
 
-  return NextResponse.json({ checkoutUrl: payment._links.checkout?.href });
+  return NextResponse.json({ checkoutUrl: session.url });
 }

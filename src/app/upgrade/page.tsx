@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { PRODUCTS, type ProductId } from "@/lib/mollie";
+import { PRODUCTS, type ProductId } from "@/lib/stripe";
 
 const PLAN_IDS = ["starter", "pro", "business"] as const;
 
