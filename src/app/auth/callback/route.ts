@@ -38,11 +38,10 @@ export async function GET(request: NextRequest) {
 
       const result = await prisma.user.upsert({
         where: { supabaseId: data.user.id },
-        update: {},
+        update: isAdmin ? { creditsLeft: 99999, tier: "BUSINESS" } : {},
         create: {
           supabaseId: data.user.id,
           email: data.user.email,
-          // Admins start with unlimited credits so they never hit the paywall
           ...(isAdmin ? { creditsLeft: 99999, tier: "BUSINESS" } : {}),
         },
         select: { createdAt: true, updatedAt: true },
