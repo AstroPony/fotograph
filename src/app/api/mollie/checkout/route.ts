@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { stripe, PRODUCTS, type ProductId } from "@/lib/stripe";
+import { stripe, PRODUCTS, PRICE_IDS, type ProductId } from "@/lib/stripe";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     mode: productConfig.mode,
     payment_method_types: ["ideal", "card"],
     locale: "nl",
-    line_items: [{ price: productConfig.priceId, quantity: 1 }],
+    line_items: [{ price: PRICE_IDS[product], quantity: 1 }],
     success_url: `${baseUrl}/upgrade?status=success&product=${product}`,
     cancel_url: `${baseUrl}/upgrade`,
     metadata: { userId: dbUser.id, product },
