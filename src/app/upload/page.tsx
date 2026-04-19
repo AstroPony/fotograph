@@ -219,6 +219,22 @@ function UploadPageInner() {
               01 — Productfoto
             </h2>
 
+            {stage === "error" && (
+              <div className="aspect-square border-2 border-black/20 flex flex-col items-center justify-center gap-4 p-8 text-center">
+                <p className="font-serif font-bold text-xl uppercase">Mislukt</p>
+                <p className="text-xs text-black/50 uppercase tracking-widest">Er is iets misgegaan</p>
+                <button
+                  onClick={reset}
+                  className="border border-black px-6 py-2 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors"
+                >
+                  Opnieuw proberen
+                </button>
+                <Link href="/dashboard" className="text-xs uppercase tracking-widest text-black/40 hover:text-black transition-colors">
+                  ← Terug naar dashboard
+                </Link>
+              </div>
+            )}
+
             {stage === "idle" ? (
               <label
                 className={`flex flex-col items-center justify-center aspect-square border-2 cursor-pointer transition-colors ${
@@ -252,7 +268,6 @@ function UploadPageInner() {
               </div>
             ) : null}
 
-            {/* Replace file when in ready state */}
             {stage === "ready" && (
               <button
                 onClick={reset}
@@ -262,12 +277,12 @@ function UploadPageInner() {
               </button>
             )}
 
-            {stage === "error" && (
+            {isProcessing && (
               <button
                 onClick={reset}
-                className="border border-black px-4 py-2 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors"
+                className="text-xs uppercase tracking-widest text-black/40 hover:text-black underline underline-offset-4 text-left"
               >
-                Opnieuw proberen
+                Annuleren
               </button>
             )}
           </div>
