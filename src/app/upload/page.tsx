@@ -181,7 +181,12 @@ function UploadPageInner() {
         )}
 
         <div className="border-b-4 border-black pb-4 mb-10">
-          <p className="text-xs uppercase tracking-widest font-medium mb-1">Fotograph — Nieuwe foto</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs uppercase tracking-widest font-medium">Fotograph — Nieuwe foto</p>
+            <Link href="/dashboard" className="text-xs uppercase tracking-widest text-black/40 hover:text-black transition-colors">
+              ← Dashboard
+            </Link>
+          </div>
           <h1 className="font-serif font-black text-5xl uppercase leading-none tracking-tight">
             Foto genereren
           </h1>
