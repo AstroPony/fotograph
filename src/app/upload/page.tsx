@@ -278,12 +278,17 @@ function UploadPageInner() {
             )}
 
             {isProcessing && (
-              <button
-                onClick={reset}
-                className="text-xs uppercase tracking-widest text-black/40 hover:text-black underline underline-offset-4 text-left"
-              >
-                Annuleren
-              </button>
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={reset}
+                  className="text-xs uppercase tracking-widest text-black/40 hover:text-black underline underline-offset-4 text-left"
+                >
+                  Loskoppelen van verwerking
+                </button>
+                <p className="text-[10px] text-black/30 uppercase tracking-widest">
+                  Generatie loopt door op de achtergrond — zie dashboard voor resultaat
+                </p>
+              </div>
             )}
           </div>
 

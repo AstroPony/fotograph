@@ -1,13 +1,13 @@
 import { Resend } from "resend";
 
-export const resend = new Resend(process.env.RESEND_API_KEY);
+function client() { return new Resend(process.env.RESEND_API_KEY); }
 
 export async function sendUsageAlert(used: number, limit: number) {
   const pct = Math.round((used / limit) * 100);
   const adminEmail = (process.env.ADMIN_EMAILS ?? "").split(",")[0].trim();
   if (!adminEmail) return;
 
-  await resend.emails.send({
+  await client().emails.send({
     from: "Fotograph <noreply@fotograph.nl>",
     to: adminEmail,
     subject: `⚠ Fotograph: ${pct}% van Photoroom-limiet gebruikt (${used}/${limit})`,
@@ -45,7 +45,7 @@ export async function sendUsageAlert(used: number, limit: number) {
 }
 
 export async function sendWelcomeEmail(email: string) {
-  await resend.emails.send({
+  await client().emails.send({
     from: "Fotograph <noreply@fotograph.nl>",
     to: email,
     subject: "Welkom bij Fotograph — je eerste 10 credits staan klaar",

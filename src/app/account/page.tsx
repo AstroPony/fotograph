@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { IMAGE_STATUS_LABELS } from "@/lib/scenes";
+import { IMAGE_STATUS_LABELS, SCENE_LABELS } from "@/lib/scenes";
 import SignOutButton from "./sign-out-button";
 
 export default async function AccountPage() {
@@ -106,7 +106,7 @@ export default async function AccountPage() {
                   <div key={img.id} className="bg-white flex items-center justify-between px-3 py-2.5 gap-3">
                     <div className="flex flex-col gap-0.5">
                       <p className="text-xs font-medium uppercase tracking-widest">
-                        {img.sceneTheme ?? "Onbekend"}
+                        {SCENE_LABELS[img.sceneTheme ?? ""] ?? img.sceneTheme ?? "Onbekend"}
                       </p>
                       <p className="text-[11px] text-black/40">
                         {new Date(img.createdAt).toLocaleDateString("nl-NL", {

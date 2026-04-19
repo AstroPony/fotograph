@@ -6,10 +6,23 @@ import { getDownloadUrl } from "@/lib/r2";
 import { SCENE_LABELS, IMAGE_STATUS_LABELS } from "@/lib/scenes";
 import { DashboardPoller } from "@/components/dashboard-poller";
 
+const STUCK_AFTER_MS = 2 * 60 * 60 * 1000; // 2 hours
+
 export default async function DashboardPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // Auto-expire stuck jobs older than 2 hours
+  const stuckCutoff = new Date(Date.now() - STUCK_AFTER_MS);
+  await prisma.image.updateMany({
+    where: {
+      user: { supabaseId: user.id },
+      status: { in: ["PENDING", "REMOVING_BG", "GENERATING", "UPSCALING"] },
+      createdAt: { lt: stuckCutoff },
+    },
+    data: { status: "FAILED" },
+  });
 
   const images = await prisma.image.findMany({
     where: { user: { supabaseId: user.id } },
@@ -31,7 +44,10 @@ export default async function DashboardPage() {
   );
 
   const done = imagesWithUrls.filter((i) => i.status === "DONE");
-  const processing = imagesWithUrls.filter((i) => i.status !== "DONE" && i.status !== "FAILED");
+  const processing = imagesWithUrls.filter(
+    (i) => i.status !== "DONE" && i.status !== "FAILED"
+  );
+  const failed = imagesWithUrls.filter((i) => i.status === "FAILED");
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -61,6 +77,38 @@ export default async function DashboardPage() {
                   </div>
                   <p className="text-xs uppercase tracking-widest text-black/50">
                     {SCENE_LABELS[img.sceneTheme ?? ""] ?? img.sceneTheme}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Failed jobs */}
+        {failed.length > 0 && (
+          <section className="mb-10">
+            <h2 className="text-xs uppercase tracking-widest font-medium border-b border-black pb-1 mb-4">
+              Mislukt — {failed.length}
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-black">
+              {failed.map((img) => (
+                <div key={img.id} className="bg-white p-4 flex flex-col gap-2">
+                  <div className="aspect-square bg-black/5 border border-black/10 flex flex-col items-center justify-center gap-3 p-4 text-center">
+                    <span className="text-xs uppercase tracking-widest text-black/30">Mislukt</span>
+                    <Link
+                      href="/upload"
+                      className="border border-black px-3 py-1 text-[10px] uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors"
+                    >
+                      Opnieuw
+                    </Link>
+                  </div>
+                  <p className="text-xs uppercase tracking-widest text-black/30">
+                    {SCENE_LABELS[img.sceneTheme ?? ""] ?? img.sceneTheme ?? "—"}
+                  </p>
+                  <p className="text-[10px] text-black/30">
+                    {new Date(img.createdAt).toLocaleDateString("nl-NL", {
+                      day: "numeric", month: "short",
+                    })}
                   </p>
                 </div>
               ))}
@@ -98,21 +146,24 @@ export default async function DashboardPage() {
                         day: "numeric", month: "long", year: "numeric",
                       })}
                     </p>
-                    {img.previewUrls[0] && (
-                      <a
-                        href={img.previewUrls[0]}
-                        download
-                        className="border border-white text-white text-xs uppercase tracking-widest px-3 py-1.5 hover:bg-white hover:text-black transition-colors text-center"
-                      >
-                        Downloaden
-                      </a>
-                    )}
+                    <div className="flex flex-col gap-1.5">
+                      {img.previewUrls.map((url, i) => (
+                        <a
+                          key={i}
+                          href={url}
+                          download
+                          className="border border-white text-white text-xs uppercase tracking-widest px-3 py-1.5 hover:bg-white hover:text-black transition-colors text-center"
+                        >
+                          {img.previewUrls.length > 1 ? `Downloaden ${i + 1}` : "Downloaden"}
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           </section>
-        ) : (
+        ) : processing.length === 0 && failed.length === 0 ? (
           /* Empty state */
           <div className="border border-black p-12 flex flex-col items-center text-center gap-6">
             <div className="border-b-2 border-black pb-4 w-full">
@@ -133,7 +184,7 @@ export default async function DashboardPage() {
               Eerste foto maken
             </Link>
           </div>
-        )}
+        ) : null}
       </main>
     </div>
   );

@@ -39,7 +39,7 @@ export function NavLinks({ credits, showBatch }: NavLinksProps) {
             : "border-black hover:bg-black hover:text-white"
         }`}
       >
-        {credits} credit{credits !== 1 ? "s" : ""}
+        {credits >= 99999 ? "∞ credits" : `${credits} credit${credits !== 1 ? "s" : ""}`}
       </Link>
       <Link href="/account" className={linkClass("/account")}>
         Account
@@ -79,7 +79,7 @@ export function NavLinks({ credits, showBatch }: NavLinksProps) {
                 </Link>
               )}
               <Link href="/upgrade" className="px-6 py-4 border-b border-black/10 hover:bg-black/5">
-                {credits} credit{credits !== 1 ? "s" : ""}
+                {credits >= 99999 ? "∞" : credits} credits
               </Link>
               <Link href="/account" className="px-6 py-4 hover:bg-black/5">
                 Account
