@@ -8,10 +8,11 @@ import { SCENE_THEMES } from "@/lib/scenes";
 
 type SceneTheme = typeof SCENE_THEMES[number];
 
-type Stage = "idle" | "uploading" | "removing-bg" | "generating" | "done" | "error";
+type Stage = "idle" | "ready" | "uploading" | "removing-bg" | "generating" | "done" | "error";
 
 const STAGE_LABELS: Record<Stage, string> = {
-  idle: "Wacht op foto",
+  idle: "",
+  ready: "",
   uploading: "Uploaden...",
   "removing-bg": "Achtergrond verwijderen...",
   generating: "Scène genereren...",
@@ -19,22 +20,24 @@ const STAGE_LABELS: Record<Stage, string> = {
   error: "Mislukt",
 };
 
-const STAGE_PROGRESS: Record<Stage, number> = {
-  idle: 0,
-  uploading: 1,
-  "removing-bg": 2,
-  generating: 3,
-  done: 4,
-  error: 0,
-};
-
 const STEPS = ["Foto", "Scène", "Genereren"];
+
+function stepState(step: number, stage: Stage): "active" | "done" | "pending" {
+  const order: Stage[] = ["idle", "ready", "uploading", "removing-bg", "generating", "done"];
+  const idx = order.indexOf(stage);
+  if (stage === "error") return "pending";
+  if (step === 1) return idx >= 1 ? "done" : "active";
+  if (step === 2) return idx >= 2 ? "done" : idx === 1 ? "active" : "pending";
+  if (step === 3) return stage === "done" ? "done" : idx >= 2 ? "active" : "pending";
+  return "pending";
+}
 
 function UploadPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [showWelcome, setShowWelcome] = useState(searchParams.get("welcome") === "1");
   const [stage, setStage] = useState<Stage>("idle");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [selectedTheme, setSelectedTheme] = useState<SceneTheme>(SCENE_THEMES[0]);
   const [dragOver, setDragOver] = useState(false);
@@ -48,66 +51,72 @@ function UploadPageInner() {
     router.replace("/upload", { scroll: false });
   }
 
-  const handleFile = useCallback(
-    async (file: File) => {
-      if (!file.type.startsWith("image/")) {
-        toast.error("Upload een afbeelding (JPG, PNG, WEBP)");
-        return;
+  function pickFile(file: File) {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Upload een afbeelding (JPG, PNG, WEBP)");
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error("Bestand is te groot (max 20MB)");
+      return;
+    }
+    setSelectedFile(file);
+    setPreviewFile(URL.createObjectURL(file));
+    setStage("ready");
+  }
+
+  async function generate() {
+    if (!selectedFile) return;
+
+    try {
+      setStage("uploading");
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contentType: selectedFile.type,
+          filename: selectedFile.name,
+          fileSize: selectedFile.size,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "Upload mislukt");
       }
-      if (file.size > 20 * 1024 * 1024) {
-        toast.error("Bestand is te groot (max 20MB)");
-        return;
+
+      const { uploadUrl, imageId: id } = await res.json();
+
+      await fetch(uploadUrl, {
+        method: "PUT",
+        body: selectedFile,
+        headers: { "Content-Type": selectedFile.type },
+      });
+
+      setStage("removing-bg");
+      const jobRes = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageId: id,
+          sceneTheme: selectedTheme.id,
+          customPrompt: selectedTheme.prompt,
+        }),
+      });
+
+      if (!jobRes.ok) {
+        const err = await jobRes.json().catch(() => ({}));
+        throw new Error(err.error ?? "Verwerking starten mislukt");
       }
 
-      setPreviewFile(URL.createObjectURL(file));
-
-      try {
-        setStage("uploading");
-
-        const res = await fetch("/api/upload", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contentType: file.type, filename: file.name, fileSize: file.size }),
-        });
-
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error ?? "Upload mislukt");
-        }
-
-        const { uploadUrl, imageId: id } = await res.json();
-
-        await fetch(uploadUrl, {
-          method: "PUT",
-          body: file,
-          headers: { "Content-Type": file.type },
-        });
-
-        setStage("removing-bg");
-        const jobRes = await fetch("/api/jobs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            imageId: id,
-            sceneTheme: selectedTheme.id,
-            customPrompt: selectedTheme.prompt,
-          }),
-        });
-
-        if (!jobRes.ok) {
-          const err = await jobRes.json().catch(() => ({}));
-          throw new Error(err.error ?? "Verwerking starten mislukt");
-        }
-
-        setStage("generating");
-        pollStatus(id);
-      } catch (err) {
-        setStage("error");
-        toast.error(err instanceof Error ? err.message : "Onbekende fout");
-      }
-    },
-    [selectedTheme]
-  );
+      setStage("generating");
+      pollStatus(id);
+    } catch (err) {
+      setStage("error");
+      toast.error(err instanceof Error ? err.message : "Onbekende fout");
+    }
+  }
 
   function pollStatus(id: string) {
     const TIMEOUT_MS = 3 * 60 * 1000;
@@ -123,14 +132,11 @@ function UploadPageInner() {
 
       const res = await fetch(`/api/jobs?imageId=${id}`);
       if (!res.ok) return;
-
       const data = await res.json();
 
-      if (data.status === "REMOVING_BG") {
-        setStage("removing-bg");
-      } else if (data.status === "GENERATING" || data.status === "UPSCALING") {
-        setStage("generating");
-      } else if (data.status === "DONE") {
+      if (data.status === "REMOVING_BG") setStage("removing-bg");
+      else if (data.status === "GENERATING" || data.status === "UPSCALING") setStage("generating");
+      else if (data.status === "DONE") {
         clearInterval(pollRef.current!);
         setPreviewUrls(data.previewUrls ?? []);
         setStage("done");
@@ -143,23 +149,25 @@ function UploadPageInner() {
     }, 2000);
   }
 
-  const onDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setDragOver(false);
-      const file = e.dataTransfer.files[0];
-      if (file) handleFile(file);
-    },
-    [handleFile]
-  );
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) pickFile(file);
+  }, []);
 
   const isProcessing = stage === "uploading" || stage === "removing-bg" || stage === "generating";
-  const currentStep = STAGE_PROGRESS[stage];
+
+  function reset() {
+    setStage("idle");
+    setSelectedFile(null);
+    setPreviewFile(null);
+    setPreviewUrls([]);
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-10">
-        {/* Welcome banner — shown on first login */}
         {showWelcome && (
           <div className="border border-black bg-black text-white px-6 py-4 mb-8 flex items-center justify-between gap-4">
             <div>
@@ -172,7 +180,6 @@ function UploadPageInner() {
           </div>
         )}
 
-        {/* Page header */}
         <div className="border-b-4 border-black pb-4 mb-10">
           <p className="text-xs uppercase tracking-widest font-medium mb-1">Fotograph — Nieuwe foto</p>
           <h1 className="font-serif font-black text-5xl uppercase leading-none tracking-tight">
@@ -181,20 +188,18 @@ function UploadPageInner() {
         </div>
 
         {/* Step indicators */}
-        <div className="flex items-center gap-0 mb-10 border border-black">
+        <div className="flex items-center mb-10 border border-black">
           {STEPS.map((step, i) => {
-            const stepNum = i + 1;
-            const active = currentStep === stepNum;
-            const done = currentStep > stepNum || stage === "done";
+            const state = stepState(i + 1, stage);
             return (
               <div
                 key={step}
                 className={`flex-1 px-4 py-3 text-xs uppercase tracking-widest font-medium border-r border-black last:border-r-0 flex items-center gap-2 ${
-                  active ? "bg-black text-white" : done ? "bg-black/10 text-black/50" : "text-black/30"
+                  state === "active" ? "bg-black text-white" : state === "done" ? "bg-black/10 text-black/50" : "text-black/30"
                 }`}
               >
-                <span className={`w-5 h-5 flex items-center justify-center text-[10px] border ${active ? "border-white" : "border-current"}`}>
-                  {done ? "✓" : stepNum}
+                <span className={`w-5 h-5 flex items-center justify-center text-[10px] border ${state === "active" ? "border-white" : "border-current"}`}>
+                  {state === "done" ? "✓" : i + 1}
                 </span>
                 {step}
               </div>
@@ -220,12 +225,10 @@ function UploadPageInner() {
               >
                 <div className="text-center pointer-events-none p-8">
                   <p className="font-serif font-bold text-2xl uppercase mb-3">Sleep hier</p>
-                  <p className="text-xs uppercase tracking-widest text-black/40">
-                    of klik om te bladeren
-                  </p>
+                  <p className="text-xs uppercase tracking-widest text-black/40">of klik om te bladeren</p>
                   <p className="text-xs text-black/30 mt-2">JPG · PNG · WEBP · max 20MB</p>
                 </div>
-                <input type="file" className="hidden" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+                <input type="file" className="hidden" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickFile(f); }} />
               </label>
             ) : previewFile ? (
               <div className="relative aspect-square">
@@ -236,7 +239,6 @@ function UploadPageInner() {
                     <p className="text-xs uppercase tracking-widest font-medium animate-pulse">
                       {STAGE_LABELS[stage]}
                     </p>
-                    {/* Progress bar */}
                     <div className="w-32 h-px bg-black/10 relative overflow-hidden">
                       <div className="absolute inset-y-0 left-0 bg-black animate-[progress_1.5s_ease-in-out_infinite]" style={{ width: "40%" }} />
                     </div>
@@ -245,9 +247,19 @@ function UploadPageInner() {
               </div>
             ) : null}
 
+            {/* Replace file when in ready state */}
+            {stage === "ready" && (
+              <button
+                onClick={reset}
+                className="text-xs uppercase tracking-widest text-black/40 hover:text-black underline underline-offset-4 text-left"
+              >
+                Andere foto kiezen
+              </button>
+            )}
+
             {stage === "error" && (
               <button
-                onClick={() => { setStage("idle"); setPreviewFile(null); }}
+                onClick={reset}
                 className="border border-black px-4 py-2 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors"
               >
                 Opnieuw proberen
@@ -255,9 +267,8 @@ function UploadPageInner() {
             )}
           </div>
 
-          {/* Right — scene + result */}
+          {/* Right — scene + generate + result */}
           <div className="bg-white p-6 flex flex-col gap-6">
-            {/* Scene selector */}
             <div>
               <h2 className="text-xs uppercase tracking-widest font-medium border-b border-black pb-2 mb-4">
                 02 — Scène
@@ -279,6 +290,16 @@ function UploadPageInner() {
                 ))}
               </div>
             </div>
+
+            {/* Generate button — shown when file is ready */}
+            {stage === "ready" && (
+              <button
+                onClick={generate}
+                className="w-full bg-black text-white px-4 py-3 text-xs uppercase tracking-widest font-medium hover:bg-black/80 transition-colors"
+              >
+                Genereer foto →
+              </button>
+            )}
 
             {/* Result */}
             {stage === "done" && previewUrls.length > 0 && (
@@ -303,7 +324,7 @@ function UploadPageInner() {
                 </div>
                 <div className="mt-4 flex flex-col gap-2">
                   <button
-                    onClick={() => { setStage("idle"); setPreviewFile(null); setPreviewUrls([]); }}
+                    onClick={reset}
                     className="w-full border border-black px-4 py-2 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors"
                   >
                     Nog een foto
