@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { getUploadUrl, MAX_UPLOAD_BYTES } from "@/lib/r2";
+import { getUploadUrl } from "@/lib/r2";
+import { MAX_UPLOAD_BYTES } from "@/lib/constants";
 import { randomUUID } from "crypto";
 
 export const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"] as const;

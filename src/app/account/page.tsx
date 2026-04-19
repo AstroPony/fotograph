@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { IMAGE_STATUS_LABELS } from "@/lib/scenes";
@@ -81,12 +82,12 @@ export default async function AccountPage() {
             )}
 
             <div className="flex flex-col gap-3 mt-auto pt-4 border-t border-black/10">
-              <a
+              <Link
                 href="/upgrade"
                 className="border border-black px-4 py-2 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors text-center"
               >
                 Credits kopen / Upgraden
-              </a>
+              </Link>
               <SignOutButton />
             </div>
           </div>

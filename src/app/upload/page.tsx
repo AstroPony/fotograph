@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { SCENE_THEMES } from "@/lib/scenes";
 
@@ -29,6 +30,9 @@ const STAGE_PROGRESS: Record<Stage, number> = {
 const STEPS = ["Foto", "Scène", "Genereren"];
 
 export default function UploadPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [showWelcome, setShowWelcome] = useState(searchParams.get("welcome") === "1");
   const [stage, setStage] = useState<Stage>("idle");
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [selectedTheme, setSelectedTheme] = useState<SceneTheme>(SCENE_THEMES[0]);
@@ -37,6 +41,11 @@ export default function UploadPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  function dismissWelcome() {
+    setShowWelcome(false);
+    router.replace("/upload", { scroll: false });
+  }
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -149,6 +158,19 @@ export default function UploadPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-10">
+        {/* Welcome banner — shown on first login */}
+        {showWelcome && (
+          <div className="border border-black bg-black text-white px-6 py-4 mb-8 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-widest font-medium text-white/50 mb-0.5">Welkom bij Fotograph</p>
+              <p className="text-sm font-medium">Je hebt <strong>10 gratis credits</strong> — elke credit = één productfoto. Geen creditcard nodig.</p>
+            </div>
+            <button onClick={dismissWelcome} className="text-white/50 hover:text-white text-xs uppercase tracking-widest shrink-0">
+              Sluiten
+            </button>
+          </div>
+        )}
+
         {/* Page header */}
         <div className="border-b-4 border-black pb-4 mb-10">
           <p className="text-xs uppercase tracking-widest font-medium mb-1">Fotograph — Nieuwe foto</p>

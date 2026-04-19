@@ -12,7 +12,7 @@ export default function NotFound() {
           Deze pagina bestaat niet of is verplaatst.
         </p>
         <Link
-          href="/dashboard"
+          href="/"
           className="border border-black px-6 py-2 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors"
         >
           Terug naar dashboard

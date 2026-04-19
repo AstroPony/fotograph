@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Nav } from "@/components/nav";
 import { PRODUCTS, type ProductId } from "@/lib/mollie";
 
 const PLAN_IDS = ["starter", "pro", "business"] as const;
@@ -32,7 +31,6 @@ export default function UpgradePage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Nav />
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-10">
         <div className="border-b-4 border-black pb-4 mb-10">
           <p className="text-xs uppercase tracking-widest font-medium mb-1">Fotograph — Upgraden</p>

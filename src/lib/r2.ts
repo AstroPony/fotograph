@@ -16,7 +16,7 @@ export const r2 = new S3Client({
 
 const BUCKET = process.env.CLOUDFLARE_R2_BUCKET_NAME!;
 
-export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20 MB
+export { MAX_UPLOAD_BYTES } from "./constants";
 
 /** Presigned URL for direct browser upload (PUT). ContentLength is signed so R2 rejects mismatches. */
 export async function getUploadUrl(key: string, contentType: string, contentLength: number) {

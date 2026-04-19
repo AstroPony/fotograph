@@ -18,12 +18,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "imageId required" }, { status: 400 });
   }
 
+  const adminEmails = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase());
+  const isAdmin = user.email ? adminEmails.includes(user.email.toLowerCase()) : false;
+
   const dbUser = await prisma.user.findUnique({
     where: { supabaseId: user.id },
     select: { creditsLeft: true },
   });
 
-  if (!dbUser || dbUser.creditsLeft < 1) {
+  if (!isAdmin && (!dbUser || dbUser.creditsLeft < 1)) {
     return NextResponse.json({ error: "Geen credits meer. Koop een creditpakket om door te gaan." }, { status: 402 });
   }
 

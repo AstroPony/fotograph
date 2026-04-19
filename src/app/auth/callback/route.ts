@@ -33,17 +33,29 @@ export async function GET(request: NextRequest) {
     }
 
     if (data.user?.email) {
+      const adminEmails = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase());
+      const isAdmin = adminEmails.includes(data.user.email.toLowerCase());
+
       const result = await prisma.user.upsert({
         where: { supabaseId: data.user.id },
         update: {},
-        create: { supabaseId: data.user.id, email: data.user.email },
+        create: {
+          supabaseId: data.user.id,
+          email: data.user.email,
+          // Admins start with unlimited credits so they never hit the paywall
+          ...(isAdmin ? { creditsLeft: 99999, tier: "BUSINESS" } : {}),
+        },
         select: { createdAt: true, updatedAt: true },
       });
-      // Send welcome email only on first sign-in (created and updated timestamps are equal)
+
       const isNew = result.createdAt.getTime() === result.updatedAt.getTime();
-      if (isNew) {
-        sendWelcomeEmail(data.user.email).catch(() => null); // fire-and-forget, never block redirect
+      if (isNew && !isAdmin) {
+        sendWelcomeEmail(data.user.email).catch(() => null);
       }
+
+      // New users land on upload with a welcome banner; returning users go straight there
+      const destination = isNew ? `${origin}/upload?welcome=1` : `${origin}/upload`;
+      return NextResponse.redirect(destination);
     }
   }
 

@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { SCENE_THEMES } from "@/lib/scenes";
-import { MAX_UPLOAD_BYTES } from "@/lib/r2";
+import { MAX_UPLOAD_BYTES } from "@/lib/constants";
 
 type SceneTheme = typeof SCENE_THEMES[number];
 type FileStatus = "queued" | "uploading" | "processing" | "done" | "error";
