@@ -196,16 +196,12 @@ export const imagePipelineTask = task({
       if (!generatedRes.ok) throw new Error(`Failed to download Replicate output: ${generatedRes.status}`);
       const generatedBuffer = Buffer.from(await generatedRes.arrayBuffer());
 
-      // Composite the original clean Photoroom cutout back over FLUX's output.
-      // FLUX may have slightly touched product-edge pixels despite the mask — this
-      // overwrites those pixels with the exact product from Photoroom, guaranteeing
-      // pixel-perfect edges. Then upscale to OUTPUT_SIZE (1200px) for Bol.com compliance.
-      const composited = await sharp(generatedBuffer)
-        .composite([{ input: productFit, left: pLeft, top: pTop, blend: "over" }])
+      // Upscale to OUTPUT_SIZE (1200px) for Bol.com compliance
+      const upscaled = await sharp(generatedBuffer)
         .resize(OUTPUT_SIZE, OUTPUT_SIZE, { fit: "fill" })
         .toBuffer();
 
-      const withExif = await sharp(composited)
+      const withExif = await sharp(upscaled)
         .withMetadata({
           exif: {
             IFD0: {
