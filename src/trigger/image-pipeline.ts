@@ -30,9 +30,9 @@ export const imagePipelineTask = task({
     const { imageId, rawR2Key, sceneTheme, customPrompt } = payload;
 
     const sceneBase = SCENE_PROMPTS[sceneTheme] ?? "";
-    const finalPrompt = customPrompt
-      ? `${sceneBase} ${customPrompt}`.trim()
-      : sceneBase;
+    const userPrompt = customPrompt ? `${sceneBase} ${customPrompt}`.trim() : sceneBase;
+    // Global safety suffix: prevent text hallucinations and unwanted practical effects
+    const finalPrompt = `${userPrompt} No text, no writing, no typography, no watermarks, no smoke, no mist, no cables, no cords.`;
 
     if (!BUCKET) throw new Error("CLOUDFLARE_R2_BUCKET_NAME is not set");
     if (!process.env.PHOTOROOM_API_KEY) throw new Error("PHOTOROOM_API_KEY is not set");

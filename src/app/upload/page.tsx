@@ -33,7 +33,7 @@ function DropZone({ onFile, dragOver, setDragOver }: {
 }) {
   return (
     <label
-      className={`flex-1 flex flex-col items-center justify-center border-2 cursor-pointer transition-colors min-h-[500px] ${
+      className={`flex-1 flex flex-col items-center justify-center border-2 cursor-pointer transition-colors ${
         dragOver ? "border-black bg-black/5" : "border-black/20 hover:border-black"
       }`}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -62,8 +62,8 @@ function StepUpload({ previewFile, onFile, onNext, onReset, dragOver, setDragOve
     return <DropZone onFile={onFile} dragOver={dragOver} setDragOver={setDragOver} />;
   }
   return (
-    <div className="flex flex-col flex-1 min-h-[500px]">
-      <div className="flex-1 bg-black/5 flex items-center justify-center">
+    <div className="flex flex-col flex-1 min-h-0">
+      <div className="flex-1 min-h-0 bg-black/5 flex items-center justify-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={previewFile} alt="Geüpload" className="w-full max-h-[60vh] object-contain" />
       </div>
@@ -86,9 +86,9 @@ function StepScene({ selectedTheme, onSelect, onBack, onGenerate }: {
   onGenerate: () => void;
 }) {
   return (
-    <div className="flex flex-col flex-1 min-h-[500px] gap-3">
+    <div className="flex flex-col flex-1 min-h-0 gap-3">
       <p className="text-xs uppercase tracking-widest text-black/50">Kies een stijl voor je foto</p>
-      <div className="flex-1 overflow-y-auto -mx-6 px-6">
+      <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
         <div className="grid grid-cols-2 gap-px bg-black">
           {SCENE_THEMES.map((theme) => (
             <button
@@ -127,7 +127,7 @@ function StepResult({ stage, resultUrls, onReset }: {
 }) {
   if (stage === "error") {
     return (
-      <div className="flex flex-col flex-1 min-h-[500px] items-center justify-center gap-6">
+      <div className="flex flex-col flex-1 min-h-0 items-center justify-center gap-6">
         <p className="font-serif font-black text-3xl uppercase">Mislukt</p>
         <p className="text-xs uppercase tracking-widest text-black/40">Er is iets misgegaan</p>
         <button onClick={onReset} className="border border-black px-6 py-3 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors">
@@ -139,8 +139,8 @@ function StepResult({ stage, resultUrls, onReset }: {
 
   if (stage === "done" && resultUrls.length > 0) {
     return (
-      <div className="flex flex-col flex-1 min-h-[500px]">
-        <div className="flex-1 flex items-center justify-center">
+      <div className="flex flex-col flex-1 min-h-0">
+        <div className="flex-1 min-h-0 flex items-center justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={resultUrls[0]} alt="Resultaat" className="w-full aspect-square object-cover" />
         </div>
@@ -160,8 +160,8 @@ function StepResult({ stage, resultUrls, onReset }: {
   }
 
   return (
-    <div className="flex flex-col flex-1 min-h-[500px]">
-      <div className="flex-1 flex flex-col items-center justify-center gap-6">
+    <div className="flex flex-col flex-1 min-h-0">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-6">
         <div className="w-16 h-16 border-2 border-black/10 border-t-black rounded-full animate-spin" />
         <p className="text-xs uppercase tracking-widest font-medium animate-pulse">
           {STAGE_LABELS[stage] ?? "Bezig..."}
@@ -267,8 +267,8 @@ function UploadPageInner() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <main className="flex-1 max-w-xl mx-auto w-full px-6 py-8 flex flex-col">
+    <div className="h-dvh flex flex-col overflow-hidden">
+      <main className="flex-1 min-h-0 max-w-xl mx-auto w-full px-6 py-8 flex flex-col overflow-hidden">
 
         {showWelcome && (
           <div className="border border-black bg-black text-white px-6 py-4 mb-6 flex items-center justify-between gap-4">
