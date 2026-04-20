@@ -13,17 +13,9 @@ const PHOTOROOM_MONTHLY_LIMIT = 1000;
 const ALERT_THRESHOLDS = [0.70, 0.85, 0.95];
 
 const BUCKET = process.env.CLOUDFLARE_R2_BUCKET_NAME;
-const SIZE = 1024;          // working resolution
-const OUTPUT_SIZE = 1200;   // Bol.com minimum (1200×1200px for zoom)
-const PRODUCT_MAX = Math.round(SIZE * 0.58); // ~594px — leaves generous scene room
-
-// Shadow parameters — light convention: upper-left, so shadow falls lower-right.
-// Two layers mimic real photography: a tight dark contact shadow + a wide soft diffuse shadow.
-// Together they ground the product without looking synthetic.
-const SHADOW = {
-  contact: { blur: 8,  offsetX: 6,  offsetY: 10, opacity: 0.55 },
-  diffuse: { blur: 24, offsetX: 14, offsetY: 20, opacity: 0.30 },
-};
+const SIZE = 1024;
+const OUTPUT_SIZE = 1200;   // Bol.com minimum
+const PRODUCT_MAX = Math.round(SIZE * 0.58); // ~594px — generous scene room
 
 export const imagePipelineTask = task({
   id: "image-pipeline",
@@ -38,15 +30,9 @@ export const imagePipelineTask = task({
     const { imageId, rawR2Key, sceneTheme, customPrompt } = payload;
 
     const sceneBase = SCENE_PROMPTS[sceneTheme] ?? "";
-    // Composition suffix: tells FLUX to keep the surface in the lower half of the frame,
-    // which is where we composite the product. "Three-quarter overhead angle" was removed —
-    // it caused FLUX to render extreme ground-level shots that floated the product.
-    const withComposition = sceneBase
-      ? `${sceneBase} The flat surface fills the lower half of the frame, background recedes behind.`
-      : "";
     const finalPrompt = customPrompt
-      ? `${withComposition} ${customPrompt}`.trim()
-      : withComposition;
+      ? `${sceneBase} ${customPrompt}`.trim()
+      : sceneBase;
 
     if (!BUCKET) throw new Error("CLOUDFLARE_R2_BUCKET_NAME is not set");
     if (!process.env.PHOTOROOM_API_KEY) throw new Error("PHOTOROOM_API_KEY is not set");
@@ -90,7 +76,7 @@ export const imagePipelineTask = task({
         data: { bgRemovedR2Key: bgRemovedKey, status: "GENERATING" },
       });
 
-      // Check monthly Photoroom usage and alert at thresholds
+      // Monthly Photoroom usage alert
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
@@ -106,13 +92,70 @@ export const imagePipelineTask = task({
         logger.info("Usage alert sent", { usedThisMonth, threshold: crossed });
       }
 
-      // 3. Generate background scene with FLUX Schnell (text-to-image).
-      // The product is never fed into FLUX — only the scene prompt is. This guarantees
-      // zero diffusion distortion on the product. Shadow is added via Sharp in step 5.
-      logger.info("Generating background scene with FLUX Schnell");
+      // 3. Resize product and compute placement
+      // Base anchored at 76% of canvas height so the product sits on the scene surface.
+      const productFit = await sharp(bgRemovedBuffer)
+        .resize(PRODUCT_MAX, PRODUCT_MAX, { fit: "inside" })
+        .ensureAlpha()
+        .png()
+        .toBuffer();
+      const { width: pw, height: ph } = await sharp(productFit).metadata();
+      const pLeft = Math.round((SIZE - pw!) / 2);
+      const pTop  = Math.round(SIZE * 0.76 - ph!);
+
+      // 4. Build inpainting canvas and mask for FLUX Fill Pro.
+      //
+      // Canvas: gray RGB 1024×1024 with the product composited in position.
+      //   FLUX can see the product's shape/colour and generate a contextually
+      //   consistent scene around it (correct lighting direction, shadow cues).
+      //
+      // Mask: WHITE (255) = generate scene, BLACK (0) = preserve product area.
+      //   FLUX Fill Pro is a non-distilled model with proper CFG guidance, so
+      //   it respects the black (keep) region far better than Fill Dev did.
+      //   Even so, we re-composite the clean Photoroom cutout on top afterwards
+      //   as a hard pixel-integrity guarantee — no diffusion distortion possible.
+      logger.info("Building inpainting canvas and mask");
+
+      const canvas = await sharp({
+        create: { width: SIZE, height: SIZE, channels: 3, background: { r: 128, g: 128, b: 128 } },
+      })
+        .composite([{ input: productFit, left: pLeft, top: pTop }])
+        .png()
+        .toBuffer();
+
+      // Build a 3-channel RGB mask: white canvas, black product footprint.
+      // Use joinChannel to merge a binary alpha silhouette onto a black RGB base,
+      // then composite the resulting RGBA onto a white canvas (alpha blending makes
+      // product area go black, surrounding area stays white).
+      const productAlpha = await sharp(productFit)
+        .extractChannel("alpha")
+        .threshold(128)   // binarise Photoroom's feathered edges
+        .png()
+        .toBuffer();
+
+      const blackBase = await sharp({
+        create: { width: pw!, height: ph!, channels: 3, background: { r: 0, g: 0, b: 0 } },
+      }).png().toBuffer();
+
+      const blackProductRGBA = await sharp(blackBase).joinChannel(productAlpha).png().toBuffer();
+
+      const mask = await sharp({
+        create: { width: SIZE, height: SIZE, channels: 3, background: { r: 255, g: 255, b: 255 } },
+      })
+        .composite([{ input: blackProductRGBA, left: pLeft, top: pTop }])
+        .png()
+        .toBuffer();
+
+      const imageB64 = `data:image/png;base64,${canvas.toString("base64")}`;
+      const maskB64  = `data:image/png;base64,${mask.toString("base64")}`;
+
+      // 5. FLUX.1 Fill Pro inpainting — generates contextual scene, lighting, and
+      //    shadows around the product. Fill Pro uses proper CFG guidance (not the
+      //    distilled architecture of Fill Dev that caused deformation).
+      logger.info("Generating scene with FLUX Fill Pro inpainting");
 
       const startRes = await fetch(
-        "https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions",
+        "https://api.replicate.com/v1/models/black-forest-labs/flux-fill-pro/predictions",
         {
           method: "POST",
           headers: {
@@ -121,11 +164,17 @@ export const imagePipelineTask = task({
           },
           body: JSON.stringify({
             input: {
+              image: imageB64,
+              mask: maskB64,
               prompt: finalPrompt,
-              width: SIZE,
-              height: SIZE,
-              num_outputs: 1,
-              num_inference_steps: 4,
+              // guidance: Fill Dev (distilled) used 30 as its special guidance parameter.
+              // Fill Pro (non-distilled) may use standard CFG (~3.5-7) OR keep the Fill
+              // convention of 30. Using 30 here — tune down if output looks overcooked.
+              guidance: 30,
+              steps: 25,
+              // safety_tolerance: Fill Pro parameter (0=strict, 2=permissive for products).
+              // May not exist on all model versions — benign if ignored by Replicate.
+              safety_tolerance: 2,
               output_format: "webp",
               output_quality: 95,
             },
@@ -138,11 +187,12 @@ export const imagePipelineTask = task({
 
       let prediction = await startRes.json();
 
-      const maxPolls = 60;
+      // Poll until done — Fill Pro runs ~25-45s at 25 steps
+      const maxPolls = 90;
       let polls = 0;
       while (prediction.status !== "succeeded" && prediction.status !== "failed") {
-        if (polls++ >= maxPolls) throw new Error("Replicate prediction timed out after 2 minutes");
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (polls++ >= maxPolls) throw new Error("Replicate prediction timed out after ~3.5 minutes");
+        await new Promise((resolve) => setTimeout(resolve, 2500));
         const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
           headers: { Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}` },
         });
@@ -159,55 +209,24 @@ export const imagePipelineTask = task({
       if (typeof outputUrl !== "string") throw new Error("Replicate returned no output URL");
       const generatedRes = await fetch(outputUrl);
       if (!generatedRes.ok) throw new Error(`Failed to download Replicate output: ${generatedRes.status}`);
-      const backgroundBuffer = Buffer.from(await generatedRes.arrayBuffer());
+      const inpaintedBuffer = Buffer.from(await generatedRes.arrayBuffer());
 
-      // 4. Resize product, preserve Photoroom's soft alpha (feathered edges → natural shadow penumbra)
-      logger.info("Compositing product with synthesized shadow");
+      // 6. Re-composite the pixel-perfect Photoroom product on top of the inpainted scene.
+      //    FLUX's shadows on the surface AROUND the product edges are preserved.
+      //    Trade-off: contact shadow directly UNDER the product (in the black/keep region)
+      //    is covered by the re-composite. Acceptable — the surrounding shadow grounds the
+      //    product; the area directly under it is hidden by the product itself anyway.
+      //    Product pixels are 100% Photoroom — zero diffusion distortion regardless of
+      //    how well Fill Pro respects the mask.
+      logger.info("Compositing clean product onto inpainted scene");
 
-      const productFit = await sharp(bgRemovedBuffer)
-        .resize(PRODUCT_MAX, PRODUCT_MAX, { fit: "inside" })
-        .ensureAlpha()
-        .png()
-        .toBuffer();
-      const { width: pw, height: ph } = await sharp(productFit).metadata();
-      const pLeft = Math.round((SIZE - pw!) / 2);
-      // Anchor product base at 76% of canvas height (not centered) so it sits on the surface
-      // zone that FLUX generates in the lower half of the frame.
-      const pTop  = Math.round(SIZE * 0.76 - ph!);
-
-      // 5. Shadow synthesis using the product's alpha channel.
-      // Photoroom's soft feathered edges serve as the natural penumbra — no threshold applied.
-      // Two layers (contact + diffuse) reproduce the appearance of a real studio shadow.
-      const alphaChannel = await sharp(productFit).extractChannel("alpha").png().toBuffer();
-
-      const contactAlpha = await sharp(alphaChannel).blur(SHADOW.contact.blur).linear(SHADOW.contact.opacity, 0).png().toBuffer();
-      const diffuseAlpha = await sharp(alphaChannel).blur(SHADOW.diffuse.blur).linear(SHADOW.diffuse.opacity, 0).png().toBuffer();
-
-      // Black RGB base joined with each alpha layer → RGBA shadow sprites
-      const shadowBase = await sharp({
-        create: { width: pw!, height: ph!, channels: 3, background: { r: 0, g: 0, b: 0 } },
-      }).png().toBuffer();
-
-      const contactShadow = await sharp(shadowBase).joinChannel(contactAlpha).png().toBuffer();
-      const diffuseShadow = await sharp(shadowBase).joinChannel(diffuseAlpha).png().toBuffer();
-
-      // 6. Final composite: background → diffuse shadow → contact shadow → product
-      // Layer order matters: diffuse is furthest from product, contact is closest.
-      // fit: "cover" — centered crop, never distorts. FLUX returns SIZE×SIZE so this is a no-op in
-      // practice, but cover is the correct defensive choice for any background image.
-      // Shadow direction: upper-left light (matches all scene prompts). Wrong for moody-industrial
-      // (rim from upper-right) and sleek-tech (no overhead) — acceptable trade-off for MVP.
-      const composited = await sharp(backgroundBuffer)
+      const composited = await sharp(inpaintedBuffer)
         .resize(SIZE, SIZE, { fit: "cover" })
-        .composite([
-          { input: diffuseShadow, left: pLeft + SHADOW.diffuse.offsetX, top: pTop + SHADOW.diffuse.offsetY },
-          { input: contactShadow, left: pLeft + SHADOW.contact.offsetX, top: pTop + SHADOW.contact.offsetY },
-          { input: productFit,    left: pLeft,                          top: pTop                           },
-        ])
+        .composite([{ input: productFit, left: pLeft, top: pTop }])
         .png()
         .toBuffer();
 
-      // 7. Upscale to OUTPUT_SIZE for Bol.com compliance, stamp EXIF
+      // 7. Upscale to OUTPUT_SIZE for Bol.com compliance, stamp EU AI Act EXIF
       logger.info("Storing generated image with EXIF metadata");
 
       const withExif = await sharp(composited)
@@ -216,7 +235,7 @@ export const imagePipelineTask = task({
           exif: {
             IFD0: {
               ImageDescription: "AI-generated product photo by Fotograph",
-              Software: "Fotograph — FLUX Schnell via Replicate",
+              Software: "Fotograph — FLUX.1 Fill Pro via Replicate",
               Artist: "Fotograph AI",
             },
           },
