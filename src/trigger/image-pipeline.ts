@@ -175,8 +175,7 @@ export const imagePipelineTask = task({
               // safety_tolerance: Fill Pro parameter (0=strict, 2=permissive for products).
               // May not exist on all model versions — benign if ignored by Replicate.
               safety_tolerance: 2,
-              output_format: "webp",
-              output_quality: 95,
+              output_format: "png",
             },
           }),
         }
@@ -205,7 +204,8 @@ export const imagePipelineTask = task({
         throw new Error(`Replicate prediction failed: ${prediction.error}`);
       }
 
-      const outputUrl = prediction.output?.[0];
+      const rawOutput = prediction.output;
+      const outputUrl = Array.isArray(rawOutput) ? rawOutput[0] : rawOutput;
       if (typeof outputUrl !== "string") throw new Error("Replicate returned no output URL");
       const generatedRes = await fetch(outputUrl);
       if (!generatedRes.ok) throw new Error(`Failed to download Replicate output: ${generatedRes.status}`);

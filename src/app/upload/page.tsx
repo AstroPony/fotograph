@@ -7,59 +7,204 @@ import { toast } from "sonner";
 import { SCENE_THEMES } from "@/lib/scenes";
 
 type SceneTheme = typeof SCENE_THEMES[number];
+// step=3 is only reachable via generate() which always transitions stage away from idle/ready.
+// Invariant: step === 3 → stage ∈ {uploading, removing-bg, generating, done, error}
 type Stage = "idle" | "ready" | "uploading" | "removing-bg" | "generating" | "done" | "error";
+type Step = 1 | 2 | 3;
 
-const STAGE_LABELS: Record<Stage, string> = {
-  idle: "",
-  ready: "",
+const STAGE_LABELS: Partial<Record<Stage, string>> = {
   uploading: "Uploaden...",
   "removing-bg": "Achtergrond verwijderen...",
   generating: "Scène genereren...",
-  done: "Klaar",
-  error: "Mislukt",
 };
 
-const STEPS = ["Foto", "Scène", "Genereren"];
+const STEP_LABELS: Record<Step, (stage: Stage) => string> = {
+  1: () => "Foto",
+  2: () => "Scène",
+  3: (stage) => stage === "done" ? "Klaar" : stage === "error" ? "Mislukt" : "Genereren",
+};
 
-function stepState(step: number, stage: Stage): "active" | "done" | "pending" {
-  const order: Stage[] = ["idle", "ready", "uploading", "removing-bg", "generating", "done"];
-  const idx = order.indexOf(stage);
-  if (stage === "error") return "pending";
-  if (step === 1) return idx >= 1 ? "done" : "active";
-  if (step === 2) return idx >= 2 ? "done" : idx === 1 ? "active" : "pending";
-  if (step === 3) return stage === "done" ? "done" : idx >= 2 ? "active" : "pending";
-  return "pending";
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function DropZone({ onFile, dragOver, setDragOver }: {
+  onFile: (f: File) => void;
+  dragOver: boolean;
+  setDragOver: (v: boolean) => void;
+}) {
+  return (
+    <label
+      className={`flex-1 flex flex-col items-center justify-center border-2 cursor-pointer transition-colors min-h-[60vw] md:min-h-[400px] ${
+        dragOver ? "border-black bg-black/5" : "border-black/20 hover:border-black"
+      }`}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) onFile(f); }}
+    >
+      <div className="text-center pointer-events-none py-12 px-8">
+        <p className="font-serif font-bold text-3xl uppercase mb-3">Sleep hier</p>
+        <p className="text-xs uppercase tracking-widest text-black/40">of klik om te bladeren</p>
+        <p className="text-xs text-black/30 mt-2">JPG · PNG · WEBP · max 20MB</p>
+      </div>
+      <input type="file" className="hidden" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
+    </label>
+  );
 }
+
+function StepUpload({ previewFile, onFile, onNext, onReset, dragOver, setDragOver }: {
+  previewFile: string | null;
+  onFile: (f: File) => void;
+  onNext: () => void;
+  onReset: () => void;
+  dragOver: boolean;
+  setDragOver: (v: boolean) => void;
+}) {
+  if (!previewFile) {
+    return <DropZone onFile={onFile} dragOver={dragOver} setDragOver={setDragOver} />;
+  }
+  return (
+    <div className="flex flex-col flex-1 gap-4">
+      <div className="bg-black/5 flex items-center justify-center min-h-[55vw] max-h-[60vh]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={previewFile} alt="Geüpload" className="w-full max-h-[60vh] object-contain" />
+      </div>
+      <div className="flex items-center gap-3">
+        <button onClick={onReset} className="text-xs uppercase tracking-widest text-black/40 hover:text-black transition-colors underline underline-offset-4 shrink-0">
+          Andere foto
+        </button>
+        <button onClick={onNext} className="flex-1 bg-black text-white px-6 py-4 text-xs uppercase tracking-widest font-medium hover:bg-black/80 transition-colors">
+          Selecteer scène →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StepScene({ selectedTheme, onSelect, onBack, onGenerate }: {
+  selectedTheme: SceneTheme;
+  onSelect: (t: SceneTheme) => void;
+  onBack: () => void;
+  onGenerate: () => void;
+}) {
+  return (
+    <div className="flex flex-col flex-1 gap-4">
+      <p className="text-xs uppercase tracking-widest text-black/50">Kies een stijl voor je foto</p>
+      <div className="flex-1 overflow-y-auto -mx-6 px-6">
+        <div className="grid grid-cols-2 gap-px bg-black">
+          {SCENE_THEMES.map((theme) => (
+            <button
+              key={theme.id}
+              onClick={() => onSelect(theme)}
+              className={`relative p-5 text-left transition-colors ${
+                selectedTheme.id === theme.id ? "bg-black text-white" : "bg-white hover:bg-black/5"
+              }`}
+            >
+              <p className="text-xs uppercase tracking-widest font-medium leading-snug">
+                {theme.label}
+              </p>
+              {selectedTheme.id === theme.id && (
+                <span className="absolute top-3 right-3 text-[10px]">✓</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center gap-3 pt-2 border-t border-black/10">
+        <button onClick={onBack} className="text-xs uppercase tracking-widest text-black/40 hover:text-black transition-colors shrink-0">
+          ← Terug
+        </button>
+        <button onClick={onGenerate} className="flex-1 bg-black text-white px-6 py-4 text-xs uppercase tracking-widest font-medium hover:bg-black/80 transition-colors">
+          Genereer foto →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StepResult({ stage, resultUrls, onReset }: {
+  stage: Stage;
+  resultUrls: string[];
+  onReset: () => void;
+}) {
+  if (stage === "error") {
+    return (
+      <div className="flex flex-col flex-1 items-center justify-center gap-6 py-8">
+        <p className="font-serif font-black text-3xl uppercase">Mislukt</p>
+        <p className="text-xs uppercase tracking-widest text-black/40">Er is iets misgegaan</p>
+        <button onClick={onReset} className="border border-black px-6 py-3 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors">
+          Opnieuw proberen
+        </button>
+      </div>
+    );
+  }
+
+  if (stage === "done" && resultUrls.length > 0) {
+    return (
+      <div className="flex flex-col flex-1 items-center gap-6 py-4">
+        <div className="w-full max-w-lg">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={resultUrls[0]} alt="Resultaat" className="w-full aspect-square object-cover" />
+        </div>
+        <div className="flex flex-col gap-2 w-full max-w-lg">
+          <a href={resultUrls[0]} download className="w-full bg-black text-white px-6 py-4 text-xs uppercase tracking-widest font-medium hover:bg-black/80 transition-colors text-center">
+            Downloaden
+          </a>
+          <button onClick={onReset} className="w-full border border-black px-6 py-3 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors">
+            Nog een foto
+          </button>
+          <Link href="/dashboard" className="w-full border border-black/30 px-6 py-3 text-xs uppercase tracking-widest font-medium text-black/40 hover:border-black hover:text-black transition-colors text-center">
+            Bekijk al je foto&apos;s →
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col flex-1 items-center justify-center gap-6 py-8">
+      <div className="flex flex-col items-center gap-6">
+        <div className="w-16 h-16 border-2 border-black/10 border-t-black rounded-full animate-spin" />
+        <p className="text-xs uppercase tracking-widest font-medium animate-pulse">
+          {STAGE_LABELS[stage] ?? "Bezig..."}
+        </p>
+      </div>
+      <p className="text-[10px] uppercase tracking-widest text-black/30 text-center max-w-xs">
+        Dit duurt ongeveer 30–60 seconden.<br />Je kunt de pagina veilig sluiten.
+      </p>
+      <button onClick={onReset} className="text-[10px] uppercase tracking-widest text-black/30 hover:text-black transition-colors">
+        Verbergen
+      </button>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 function UploadPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [showWelcome, setShowWelcome] = useState(searchParams.get("welcome") === "1");
+  const [step, setStep] = useState<Step>(1);
   const [stage, setStage] = useState<Stage>("idle");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
-  const [selectedTheme, setSelectedTheme] = useState<SceneTheme>(SCENE_THEMES[0]);
-  const [dragOver, setDragOver] = useState(false);
   const [previewFile, setPreviewFile] = useState<string | null>(null);
+  const [selectedTheme, setSelectedTheme] = useState<SceneTheme>(SCENE_THEMES[0]);
+  const [resultUrls, setResultUrls] = useState<string[]>([]);
+  const [dragOver, setDragOver] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
-  function dismissWelcome() {
-    setShowWelcome(false);
-    router.replace("/upload", { scroll: false });
-  }
-
-  function pickFile(file: File) {
+  const pickFile = useCallback((file: File) => {
     if (!file.type.startsWith("image/")) { toast.error("Upload een afbeelding (JPG, PNG, WEBP)"); return; }
     if (file.size > 20 * 1024 * 1024) { toast.error("Bestand is te groot (max 20MB)"); return; }
     setSelectedFile(file);
     setPreviewFile(URL.createObjectURL(file));
     setStage("ready");
-  }
+  }, []);
 
   async function generate() {
     if (!selectedFile) return;
+    setStep(3);
     try {
       setStage("uploading");
       const res = await fetch("/api/upload", {
@@ -103,9 +248,8 @@ function UploadPageInner() {
       else if (data.status === "GENERATING" || data.status === "UPSCALING") setStage("generating");
       else if (data.status === "DONE") {
         clearInterval(pollRef.current!);
-        setPreviewUrls(data.previewUrls ?? []);
+        setResultUrls(data.previewUrls ?? []);
         setStage("done");
-        toast.success("Foto's zijn klaar!");
       } else if (data.status === "FAILED") {
         clearInterval(pollRef.current!);
         setStage("error");
@@ -114,258 +258,66 @@ function UploadPageInner() {
     }, 2000);
   }
 
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault(); setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) pickFile(file);
-  }, []);
-
-  const isProcessing = stage === "uploading" || stage === "removing-bg" || stage === "generating";
-
   function reset() {
     if (pollRef.current) clearInterval(pollRef.current);
-    setStage("idle"); setSelectedFile(null); setPreviewFile(null); setPreviewUrls([]);
+    setStep(1); setStage("idle");
+    setSelectedFile(null); setPreviewFile(null); setResultUrls([]);
   }
-
-  // ── Shared sub-components ─────────────────────────────────────────────────
-
-  const DropZone = (
-    <label
-      className={`flex flex-col items-center justify-center border-2 cursor-pointer transition-colors ${
-        dragOver ? "border-black bg-black/5" : "border-black/20 hover:border-black"
-      }`}
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={onDrop}
-    >
-      <div className="text-center pointer-events-none py-10 px-8">
-        <p className="font-serif font-bold text-2xl uppercase mb-3">Sleep hier</p>
-        <p className="text-xs uppercase tracking-widest text-black/40">of klik om te bladeren</p>
-        <p className="text-xs text-black/30 mt-2">JPG · PNG · WEBP · max 20MB</p>
-      </div>
-      <input type="file" className="hidden" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickFile(f); }} />
-    </label>
-  );
-
-  const ScenePicker = (
-    <div className="flex flex-col gap-px bg-black/10">
-      {SCENE_THEMES.map((theme) => (
-        <button
-          key={theme.id}
-          onClick={() => !isProcessing && setSelectedTheme(theme)}
-          disabled={isProcessing}
-          className={`px-4 py-2.5 text-left text-xs uppercase tracking-widest font-medium transition-colors ${
-            selectedTheme.id === theme.id ? "bg-black text-white" : "bg-white hover:bg-black/5 disabled:opacity-40"
-          }`}
-        >
-          {theme.label}
-        </button>
-      ))}
-    </div>
-  );
-
-  const InlineProgress = (
-    <div className="border border-black/10 p-4 flex flex-col gap-3">
-      <p className="text-xs uppercase tracking-widest font-medium animate-pulse">{STAGE_LABELS[stage]}</p>
-      <div className="w-full h-px bg-black/10 relative overflow-hidden">
-        <div className="absolute inset-y-0 left-0 bg-black animate-[progress_1.5s_ease-in-out_infinite]" style={{ width: "40%" }} />
-      </div>
-      <button onClick={reset} className="text-[10px] uppercase tracking-widest text-black/30 hover:text-black text-left">
-        Verbergen — de verwerking loopt door op de achtergrond
-      </button>
-    </div>
-  );
-
-  const ResultPanel = previewUrls.length > 0 ? (
-    <div className="flex flex-col gap-2">
-      <div className="grid grid-cols-1 gap-px bg-black">
-        {previewUrls.map((url, i) => (
-          <div key={i} className="relative group">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt={`Gegenereerd ${i + 1}`} className="w-full aspect-square object-cover" />
-            <a
-              href={url}
-              download
-              className="absolute inset-x-0 bottom-0 bg-black text-white text-xs uppercase tracking-widest font-medium py-2 text-center opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              Downloaden
-            </a>
-          </div>
-        ))}
-      </div>
-      <button onClick={reset} className="w-full border border-black px-4 py-2 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors">
-        Nog een foto
-      </button>
-      <Link href="/dashboard" className="w-full border border-black/30 px-4 py-2 text-xs uppercase tracking-widest font-medium text-black/50 hover:border-black hover:text-black transition-colors text-center">
-        Bekijk al je foto&apos;s →
-      </Link>
-    </div>
-  ) : null;
 
   return (
     <div className="min-h-screen flex flex-col">
-      <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-10">
+      <main className="flex-1 max-w-xl mx-auto w-full px-6 py-8 flex flex-col">
 
         {showWelcome && (
-          <div className="border border-black bg-black text-white px-6 py-4 mb-8 flex items-center justify-between gap-4">
+          <div className="border border-black bg-black text-white px-6 py-4 mb-6 flex items-center justify-between gap-4">
             <div>
               <p className="text-xs uppercase tracking-widest font-medium text-white/50 mb-0.5">Welkom bij Fotograph</p>
-              <p className="text-sm font-medium">Je hebt <strong>10 gratis credits</strong> — elke credit = één productfoto. Geen creditcard nodig.</p>
+              <p className="text-sm font-medium">Je hebt <strong>10 gratis credits</strong> — elke credit = één productfoto.</p>
             </div>
-            <button onClick={dismissWelcome} className="text-white/50 hover:text-white text-xs uppercase tracking-widest shrink-0">Sluiten</button>
+            <button
+              onClick={() => { setShowWelcome(false); router.replace("/upload", { scroll: false }); }}
+              className="text-white/50 hover:text-white text-xs uppercase tracking-widest shrink-0"
+            >
+              ×
+            </button>
           </div>
         )}
 
-        <div className="border-b-4 border-black pb-4 mb-8">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs uppercase tracking-widest font-medium">Fotograph — Nieuwe foto</p>
-            <Link href="/dashboard" className="text-xs uppercase tracking-widest text-black/40 hover:text-black transition-colors">← Dashboard</Link>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            {([1, 2, 3] as Step[]).map((s) => (
+              <div key={s} className={`w-2 h-2 rounded-full transition-colors ${step === s ? "bg-black" : step > s ? "bg-black/40" : "bg-black/15"}`} />
+            ))}
+            <span className="text-xs uppercase tracking-widest text-black/40 ml-1">
+              {STEP_LABELS[step](stage)}
+            </span>
           </div>
-          <h1 className="font-serif font-black text-5xl uppercase leading-none tracking-tight">Foto genereren</h1>
+          <Link href="/dashboard" className="text-xs uppercase tracking-widest text-black/40 hover:text-black transition-colors">
+            ← Dashboard
+          </Link>
         </div>
 
-        {/* Step indicators */}
-        <div className="flex items-center mb-8 border border-black">
-          {STEPS.map((step, i) => {
-            const state = stepState(i + 1, stage);
-            return (
-              <div key={step} className={`flex-1 px-4 py-3 text-xs uppercase tracking-widest font-medium border-r border-black last:border-r-0 flex items-center gap-2 ${
-                state === "active" ? "bg-black text-white" : state === "done" ? "bg-black/10 text-black/50" : "text-black/30"
-              }`}>
-                <span className={`w-5 h-5 flex items-center justify-center text-[10px] border ${state === "active" ? "border-white" : "border-current"}`}>
-                  {state === "done" ? "✓" : i + 1}
-                </span>
-                {step}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* ── MOBILE layout (single column, strict top-to-bottom) ───────────── */}
-        <div className="flex flex-col gap-4 md:hidden">
-
-          {/* 1. Upload / thumbnail */}
-          {stage === "idle" && DropZone}
-
-          {stage === "error" && (
-            <div className="border-2 border-black/20 p-8 flex flex-col items-center text-center gap-4">
-              <p className="font-serif font-bold text-xl uppercase">Mislukt</p>
-              <p className="text-xs text-black/50 uppercase tracking-widest">Er is iets misgegaan</p>
-              <button onClick={reset} className="border border-black px-6 py-2 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors">
-                Opnieuw proberen
-              </button>
-              <Link href="/dashboard" className="text-xs uppercase tracking-widest text-black/40 hover:text-black transition-colors">← Dashboard</Link>
-            </div>
-          )}
-
-          {previewFile && stage !== "idle" && stage !== "error" && stage !== "done" && (
-            <div className="flex items-center gap-3 border border-black/10 p-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={previewFile} alt="Origineel" className="w-16 h-16 object-cover border border-black/10 shrink-0" />
-              <div className="flex flex-col gap-1 min-w-0">
-                <p className="text-xs uppercase tracking-widest font-medium truncate">{selectedFile?.name}</p>
-                {stage === "ready" && (
-                  <button onClick={reset} className="text-[10px] uppercase tracking-widest text-black/40 hover:text-black text-left">Andere foto kiezen</button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* 2. Scene selector — always visible once file is picked */}
-          {(stage === "ready" || isProcessing) && (
-            <div>
-              <p className="text-xs uppercase tracking-widest font-medium border-b border-black pb-2 mb-3">02 — Scène</p>
-              {ScenePicker}
-            </div>
-          )}
-
-          {/* 3. Generate button */}
-          {stage === "ready" && (
-            <button onClick={generate} className="w-full bg-black text-white px-4 py-4 text-xs uppercase tracking-widest font-medium hover:bg-black/80 transition-colors">
-              Genereer foto →
-            </button>
-          )}
-
-          {/* 4. Inline progress — appears right below generate button */}
-          {isProcessing && InlineProgress}
-
-          {/* 5. Result — appears right below progress */}
-          {stage === "done" && ResultPanel}
-        </div>
-
-        {/* ── DESKTOP layout (two columns) ─────────────────────────────────── */}
-        <div className="hidden md:grid md:grid-cols-2 gap-px bg-black">
-
-          {/* Left — upload + preview */}
-          <div className="bg-white p-6 flex flex-col gap-4">
-            <h2 className="text-xs uppercase tracking-widest font-medium border-b border-black pb-2">01 — Productfoto</h2>
-
-            {stage === "error" && (
-              <div className="aspect-square border-2 border-black/20 flex flex-col items-center justify-center gap-4 p-8 text-center">
-                <p className="font-serif font-bold text-xl uppercase">Mislukt</p>
-                <p className="text-xs text-black/50 uppercase tracking-widest">Er is iets misgegaan</p>
-                <button onClick={reset} className="border border-black px-6 py-2 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors">
-                  Opnieuw proberen
-                </button>
-                <Link href="/dashboard" className="text-xs uppercase tracking-widest text-black/40 hover:text-black transition-colors">← Terug naar dashboard</Link>
-              </div>
-            )}
-
-            {stage === "idle" && DropZone}
-
-            {previewFile && stage !== "idle" && stage !== "error" ? (
-              <div className="relative aspect-square">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={previewFile} alt="Origineel" className="w-full h-full object-contain border border-black/10" />
-                {isProcessing && (
-                  <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center gap-3">
-                    <p className="text-xs uppercase tracking-widest font-medium animate-pulse">{STAGE_LABELS[stage]}</p>
-                    <div className="w-32 h-px bg-black/10 relative overflow-hidden">
-                      <div className="absolute inset-y-0 left-0 bg-black animate-[progress_1.5s_ease-in-out_infinite]" style={{ width: "40%" }} />
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : null}
-
-            {stage === "ready" && (
-              <button onClick={reset} className="text-xs uppercase tracking-widest text-black/40 hover:text-black underline underline-offset-4 text-left">
-                Andere foto kiezen
-              </button>
-            )}
-            {isProcessing && (
-              <div className="flex flex-col gap-1">
-                <button onClick={reset} className="text-xs uppercase tracking-widest text-black/40 hover:text-black underline underline-offset-4 text-left">
-                  Verbergen
-                </button>
-                <p className="text-[10px] text-black/30 uppercase tracking-widest">
-                  De verwerking loopt door op de achtergrond — bekijk het resultaat in je dashboard
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Right — scene + generate + result */}
-          <div className="bg-white p-6 flex flex-col gap-6">
-            <div>
-              <h2 className="text-xs uppercase tracking-widest font-medium border-b border-black pb-2 mb-4">02 — Scène</h2>
-              {ScenePicker}
-            </div>
-
-            {stage === "ready" && (
-              <button onClick={generate} className="w-full bg-black text-white px-4 py-3 text-xs uppercase tracking-widest font-medium hover:bg-black/80 transition-colors">
-                Genereer foto →
-              </button>
-            )}
-
-            {stage === "done" && previewUrls.length > 0 && (
-              <div>
-                <h2 className="text-xs uppercase tracking-widest font-medium border-b border-black pb-2 mb-4">03 — Resultaat</h2>
-                {ResultPanel}
-              </div>
-            )}
-          </div>
-        </div>
+        {step === 1 && (
+          <StepUpload
+            previewFile={previewFile}
+            onFile={pickFile}
+            onNext={() => setStep(2)}
+            onReset={reset}
+            dragOver={dragOver}
+            setDragOver={setDragOver}
+          />
+        )}
+        {step === 2 && (
+          <StepScene
+            selectedTheme={selectedTheme}
+            onSelect={setSelectedTheme}
+            onBack={() => setStep(1)}
+            onGenerate={generate}
+          />
+        )}
+        {step === 3 && (
+          <StepResult stage={stage} resultUrls={resultUrls} onReset={reset} />
+        )}
 
       </main>
     </div>
