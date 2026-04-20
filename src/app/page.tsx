@@ -29,7 +29,7 @@ export default async function Home() {
           <p className="text-xs uppercase tracking-widest font-medium mb-4 text-black/50">
             AI productfotografie voor Bol.com &amp; webshops
           </p>
-          <h1 className="font-serif font-black text-5xl sm:text-6xl md:text-8xl uppercase leading-none tracking-tight mb-8">
+          <h1 className="font-serif font-black text-4xl sm:text-6xl md:text-8xl uppercase leading-none tracking-tight mb-8">
             Professionele<br />productfoto&apos;s<br />in seconden.
           </h1>
           <p className="text-base text-black/60 max-w-lg mb-10 leading-relaxed">

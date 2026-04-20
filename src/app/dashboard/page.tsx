@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getDownloadUrl } from "@/lib/r2";
 import { SCENE_LABELS, IMAGE_STATUS_LABELS } from "@/lib/scenes";
 import { DashboardPoller } from "@/components/dashboard-poller";
+import { DashboardGallery } from "@/components/dashboard-gallery";
 
 const STUCK_AFTER_MS = 2 * 60 * 60 * 1000; // 2 hours
 
@@ -84,12 +85,13 @@ export default async function DashboardPage() {
           </section>
         )}
 
-        {/* Failed jobs */}
+        {/* Failed jobs — collapsed by default */}
         {failed.length > 0 && (
-          <section className="mb-10">
-            <h2 className="text-xs uppercase tracking-widest font-medium border-b border-black pb-1 mb-4">
-              Mislukt — {failed.length}
-            </h2>
+          <details className="mb-10 group">
+            <summary className="text-xs uppercase tracking-widest font-medium border-b border-black pb-1 mb-4 cursor-pointer list-none flex items-center justify-between select-none hover:text-black/60 transition-colors">
+              <span>Mislukt — {failed.length}</span>
+              <span className="text-black/40 group-open:rotate-180 transition-transform duration-200">▾</span>
+            </summary>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-black">
               {failed.map((img) => (
                 <div key={img.id} className="bg-white p-4 flex flex-col gap-2">
@@ -113,7 +115,7 @@ export default async function DashboardPage() {
                 </div>
               ))}
             </div>
-          </section>
+          </details>
         )}
 
         {/* Completed gallery */}
@@ -122,46 +124,7 @@ export default async function DashboardPage() {
             <h2 className="text-xs uppercase tracking-widest font-medium border-b border-black pb-1 mb-4">
               Gereed — {done.length}
             </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-px bg-black">
-              {done.map((img) => (
-                <div key={img.id} className="bg-white group relative overflow-hidden">
-                  {img.previewUrls[0] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={img.previewUrls[0]}
-                      alt={`${SCENE_LABELS[img.sceneTheme ?? ""] ?? "Foto"} — ${img.id.slice(-6)}`}
-                      className="w-full aspect-square object-cover"
-                    />
-                  ) : (
-                    <div className="w-full aspect-square bg-black/5" />
-                  )}
-
-                  {/* Hover overlay */}
-                  <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4 gap-3">
-                    <p className="text-white font-serif font-black text-lg uppercase leading-tight">
-                      {SCENE_LABELS[img.sceneTheme ?? ""] ?? img.sceneTheme}
-                    </p>
-                    <p className="text-white/50 text-xs uppercase tracking-widest">
-                      {new Date(img.createdAt).toLocaleDateString("nl-NL", {
-                        day: "numeric", month: "long", year: "numeric",
-                      })}
-                    </p>
-                    <div className="flex flex-col gap-1.5">
-                      {img.previewUrls.map((url, i) => (
-                        <a
-                          key={i}
-                          href={url}
-                          download
-                          className="border border-white text-white text-xs uppercase tracking-widest px-3 py-1.5 hover:bg-white hover:text-black transition-colors text-center"
-                        >
-                          {img.previewUrls.length > 1 ? `Downloaden ${i + 1}` : "Downloaden"}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <DashboardGallery images={done} />
           </section>
         ) : processing.length === 0 && failed.length === 0 ? (
           /* Empty state */

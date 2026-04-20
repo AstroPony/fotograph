@@ -27,7 +27,7 @@ export const SCENE_THEMES = [
   {
     id: "moody-industrial",
     label: "Industrieel donker",
-    prompt: "Dark wet-look matte concrete plinth with subtle mineral flecks and a faint crack running across the surface, a single rough slate tile leaning against a distant blurred charcoal wall, a wisp of low cool mist drifting across the base, dramatic low-key rim light from the upper right sculpting the edge of the scene, deep moody shadows on the left, restrained colour palette of slate, graphite and deep teal, shot on full frame 85mm at f/2.8, high-end commercial product photography, noir editorial, sharp specular highlights, cinematic contrast.",
+    prompt: "Dark wet-look matte concrete slab, the flat surface filling the lower foreground, subtle mineral flecks and a faint crack running across it, a single rough slate tile leaning against a distant blurred charcoal wall, a wisp of low cool mist drifting across the base, dramatic low-key rim light from the upper right sculpting the scene, deep moody shadows on the left, restrained colour palette of slate, graphite and deep teal, shot on full frame 85mm at f/2.8, high-end commercial product photography, noir editorial, sharp specular highlights, cinematic contrast.",
   },
   {
     id: "golden-hour-lifestyle",
@@ -37,7 +37,7 @@ export const SCENE_THEMES = [
   {
     id: "sunlit-coastal",
     label: "Kust & zon",
-    prompt: "Pale travertine stone ledge dusted with fine sand, a weathered piece of driftwood resting diagonally in the middle distance, a single dried starfish and a pale shell to the side, shallow Mediterranean sea foam blurred on the horizon, hazy golden mid-morning sun from the right casting long soft shadows, warm salt-air atmosphere with faint sea spray in the light, shot on full frame 35mm at f/3.5, summer lifestyle photography, Condé Nast Traveller aesthetic, gentle film grain, warm highlights.",
+    prompt: "Pale travertine stone slab, flat surface extending naturally into the foreground, dusted with fine sand, a weathered piece of driftwood and a dried starfish resting to the side, shallow Mediterranean sea foam blurred on the horizon, hazy golden mid-morning sun from the right casting long soft shadows, warm salt-air atmosphere with faint sea spray in the light, shot on full frame 35mm at f/3.5, summer lifestyle photography, Condé Nast Traveller aesthetic, gentle film grain, warm highlights.",
   },
   {
     id: "winter-cosy",
