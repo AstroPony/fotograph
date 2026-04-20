@@ -33,7 +33,7 @@ function DropZone({ onFile, dragOver, setDragOver }: {
 }) {
   return (
     <label
-      className={`flex-1 flex flex-col items-center justify-center border-2 cursor-pointer transition-colors min-h-[60vw] md:min-h-[400px] ${
+      className={`flex-1 flex flex-col items-center justify-center border-2 cursor-pointer transition-colors min-h-[500px] ${
         dragOver ? "border-black bg-black/5" : "border-black/20 hover:border-black"
       }`}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -62,12 +62,12 @@ function StepUpload({ previewFile, onFile, onNext, onReset, dragOver, setDragOve
     return <DropZone onFile={onFile} dragOver={dragOver} setDragOver={setDragOver} />;
   }
   return (
-    <div className="flex flex-col flex-1 gap-4">
-      <div className="bg-black/5 flex items-center justify-center min-h-[55vw] max-h-[60vh]">
+    <div className="flex flex-col flex-1 min-h-[500px]">
+      <div className="flex-1 bg-black/5 flex items-center justify-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={previewFile} alt="Geüpload" className="w-full max-h-[60vh] object-contain" />
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 mt-auto border-t border-black/10 pt-3">
         <button onClick={onReset} className="text-xs uppercase tracking-widest text-black/40 hover:text-black transition-colors underline underline-offset-4 shrink-0">
           Andere foto
         </button>
@@ -86,7 +86,7 @@ function StepScene({ selectedTheme, onSelect, onBack, onGenerate }: {
   onGenerate: () => void;
 }) {
   return (
-    <div className="flex flex-col flex-1 gap-4">
+    <div className="flex flex-col flex-1 min-h-[500px] gap-3">
       <p className="text-xs uppercase tracking-widest text-black/50">Kies een stijl voor je foto</p>
       <div className="flex-1 overflow-y-auto -mx-6 px-6">
         <div className="grid grid-cols-2 gap-px bg-black">
@@ -127,7 +127,7 @@ function StepResult({ stage, resultUrls, onReset }: {
 }) {
   if (stage === "error") {
     return (
-      <div className="flex flex-col flex-1 items-center justify-center gap-6 py-8">
+      <div className="flex flex-col flex-1 min-h-[500px] items-center justify-center gap-6">
         <p className="font-serif font-black text-3xl uppercase">Mislukt</p>
         <p className="text-xs uppercase tracking-widest text-black/40">Er is iets misgegaan</p>
         <button onClick={onReset} className="border border-black px-6 py-3 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors">
@@ -139,12 +139,12 @@ function StepResult({ stage, resultUrls, onReset }: {
 
   if (stage === "done" && resultUrls.length > 0) {
     return (
-      <div className="flex flex-col flex-1 items-center gap-6 py-4">
-        <div className="w-full max-w-lg">
+      <div className="flex flex-col flex-1 min-h-[500px]">
+        <div className="flex-1 flex items-center justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={resultUrls[0]} alt="Resultaat" className="w-full aspect-square object-cover" />
         </div>
-        <div className="flex flex-col gap-2 w-full max-w-lg">
+        <div className="flex flex-col gap-2 mt-auto border-t border-black/10 pt-3">
           <a href={resultUrls[0]} download className="w-full bg-black text-white px-6 py-4 text-xs uppercase tracking-widest font-medium hover:bg-black/80 transition-colors text-center">
             Downloaden
           </a>
@@ -160,19 +160,21 @@ function StepResult({ stage, resultUrls, onReset }: {
   }
 
   return (
-    <div className="flex flex-col flex-1 items-center justify-center gap-6 py-8">
-      <div className="flex flex-col items-center gap-6">
+    <div className="flex flex-col flex-1 min-h-[500px]">
+      <div className="flex-1 flex flex-col items-center justify-center gap-6">
         <div className="w-16 h-16 border-2 border-black/10 border-t-black rounded-full animate-spin" />
         <p className="text-xs uppercase tracking-widest font-medium animate-pulse">
           {STAGE_LABELS[stage] ?? "Bezig..."}
         </p>
+        <p className="text-[10px] uppercase tracking-widest text-black/30 text-center max-w-xs">
+          Dit duurt ongeveer 30–60 seconden.<br />Je kunt de pagina veilig sluiten.
+        </p>
       </div>
-      <p className="text-[10px] uppercase tracking-widest text-black/30 text-center max-w-xs">
-        Dit duurt ongeveer 30–60 seconden.<br />Je kunt de pagina veilig sluiten.
-      </p>
-      <button onClick={onReset} className="text-[10px] uppercase tracking-widest text-black/30 hover:text-black transition-colors">
-        Verbergen
-      </button>
+      <div className="mt-auto border-t border-black/10 pt-3">
+        <button onClick={onReset} className="text-[10px] uppercase tracking-widest text-black/30 hover:text-black transition-colors">
+          Verbergen
+        </button>
+      </div>
     </div>
   );
 }
