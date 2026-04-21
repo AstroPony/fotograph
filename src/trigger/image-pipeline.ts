@@ -219,7 +219,7 @@ export const imagePipelineTask = task({
 
       let productToComposite = productFit;
       const shadowFormData = new FormData();
-      shadowFormData.append("imageFile", new Blob([productFit], { type: "image/png" }), "product.png");
+      shadowFormData.append("imageFile", new Blob([new Uint8Array(productFit)], { type: "image/png" }), "product.png");
       shadowFormData.append("shadow.mode", "ai.soft");
 
       const shadowRes = await fetch("https://image-api.photoroom.com/v2/edit", {
