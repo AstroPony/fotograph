@@ -211,18 +211,35 @@ export const imagePipelineTask = task({
       if (!generatedRes.ok) throw new Error(`Failed to download Replicate output: ${generatedRes.status}`);
       const inpaintedBuffer = Buffer.from(await generatedRes.arrayBuffer());
 
-      // 6. Re-composite the pixel-perfect Photoroom product on top of the inpainted scene.
-      //    FLUX's shadows on the surface AROUND the product edges are preserved.
-      //    Trade-off: contact shadow directly UNDER the product (in the black/keep region)
-      //    is covered by the re-composite. Acceptable — the surrounding shadow grounds the
-      //    product; the area directly under it is hidden by the product itself anyway.
-      //    Product pixels are 100% Photoroom — zero diffusion distortion regardless of
-      //    how well Fill Pro respects the mask.
-      logger.info("Compositing clean product onto inpainted scene");
+      // 6. Add AI contact shadow to the clean cutout via Photoroom Shadow API,
+      //    then composite the result onto the FLUX scene.
+      //    Shadow is requested on the transparent cutout so it alpha-blends naturally
+      //    onto the FLUX-generated surface. Gracefully falls back to no shadow on error.
+      logger.info("Adding contact shadow via Photoroom");
+
+      let productToComposite = productFit;
+      const shadowFormData = new FormData();
+      shadowFormData.append("imageFile", new Blob([productFit], { type: "image/png" }), "product.png");
+      shadowFormData.append("shadow.mode", "ai.soft");
+
+      const shadowRes = await fetch("https://image-api.photoroom.com/v2/edit", {
+        method: "POST",
+        headers: { "x-api-key": process.env.PHOTOROOM_API_KEY! },
+        body: shadowFormData,
+      });
+
+      if (shadowRes.ok) {
+        productToComposite = Buffer.from(await shadowRes.arrayBuffer());
+        logger.info("Shadow applied");
+      } else {
+        logger.warn("Photoroom shadow skipped", { status: shadowRes.status, body: await shadowRes.text() });
+      }
+
+      logger.info("Compositing product onto inpainted scene");
 
       const composited = await sharp(inpaintedBuffer)
         .resize(SIZE, SIZE, { fit: "cover" })
-        .composite([{ input: productFit, left: pLeft, top: pTop }])
+        .composite([{ input: productToComposite, left: pLeft, top: pTop }])
         .png()
         .toBuffer();
 
