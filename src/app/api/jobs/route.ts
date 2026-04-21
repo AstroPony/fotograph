@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { tasks } from "@trigger.dev/sdk";
 import { getDownloadUrl } from "@/lib/r2";
+import { SCENE_THEMES } from "@/lib/scenes";
+
+const VALID_SCENE_IDS = new Set(SCENE_THEMES.map((t) => t.id));
+const MAX_CUSTOM_PROMPT_LENGTH = 300;
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -12,10 +16,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { imageId, sceneTheme, customPrompt } = await request.json();
+  let body: { imageId?: string; sceneTheme?: string; customPrompt?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const { imageId, sceneTheme, customPrompt } = body;
 
   if (!imageId) {
     return NextResponse.json({ error: "imageId required" }, { status: 400 });
+  }
+
+  if (sceneTheme && !VALID_SCENE_IDS.has(sceneTheme)) {
+    return NextResponse.json({ error: "Ongeldige scène" }, { status: 400 });
+  }
+
+  if (customPrompt && customPrompt.length > MAX_CUSTOM_PROMPT_LENGTH) {
+    return NextResponse.json({ error: `Aangepaste prompt mag maximaal ${MAX_CUSTOM_PROMPT_LENGTH} tekens zijn` }, { status: 400 });
   }
 
   const adminEmails = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase());

@@ -15,7 +15,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { contentType, filename, fileSize } = await request.json();
+  let body: { contentType?: string; filename?: string; fileSize?: number };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const { contentType, filename, fileSize } = body;
 
   if (!contentType || !filename || typeof fileSize !== "number") {
     return NextResponse.json({ error: "contentType, filename en fileSize zijn verplicht" }, { status: 400 });

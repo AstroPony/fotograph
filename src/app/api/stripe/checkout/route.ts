@@ -8,9 +8,20 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { product } = await request.json() as { product: ProductId };
-  const productConfig = PRODUCTS[product];
+  let body: { product?: ProductId };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const { product } = body;
+  const productConfig = product ? PRODUCTS[product] : null;
   if (!productConfig) return NextResponse.json({ error: "Ongeldig product" }, { status: 400 });
+
+  if (!PRICE_IDS[product!]) {
+    console.error(`[stripe/checkout] Missing price ID for product: ${product}`);
+    return NextResponse.json({ error: "Product niet beschikbaar" }, { status: 500 });
+  }
 
   const dbUser = await prisma.user.findUnique({
     where: { supabaseId: user.id },
