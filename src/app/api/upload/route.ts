@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "contentType, filename en fileSize zijn verplicht" }, { status: 400 });
   }
 
-  if (!ALLOWED_MIME_TYPES.includes(contentType)) {
+  if (!(ALLOWED_MIME_TYPES as readonly string[]).includes(contentType)) {
     return NextResponse.json({ error: "Bestandstype niet toegestaan (gebruik JPG, PNG of WEBP)" }, { status: 415 });
   }
 

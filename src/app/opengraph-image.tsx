@@ -16,8 +16,9 @@ async function getPlayfairBlack(): Promise<ArrayBuffer> {
   ).then((r) => r.text());
   const url = css.match(/url\(([^)]+)\)/)?.[1];
   if (!url) throw new Error("Playfair Display font URL not found");
-  _fontData = await fetch(url).then((r) => r.arrayBuffer());
-  return _fontData;
+  const data = await fetch(url).then((r) => r.arrayBuffer());
+  _fontData = data;
+  return data;
 }
 
 const headlines = [

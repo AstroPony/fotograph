@@ -15,10 +15,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const { product } = body;
-  const productConfig = product ? PRODUCTS[product] : null;
+  if (!product) return NextResponse.json({ error: "Ongeldig product" }, { status: 400 });
+
+  const productConfig = PRODUCTS[product];
   if (!productConfig) return NextResponse.json({ error: "Ongeldig product" }, { status: 400 });
 
-  if (!PRICE_IDS[product!]) {
+  if (!PRICE_IDS[product]) {
     console.error(`[stripe/checkout] Missing price ID for product: ${product}`);
     return NextResponse.json({ error: "Product niet beschikbaar" }, { status: 500 });
   }
