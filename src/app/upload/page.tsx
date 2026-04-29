@@ -90,22 +90,32 @@ function StepScene({ selectedTheme, onSelect, onBack, onGenerate }: {
       <p className="text-xs uppercase tracking-widest text-black/50">Kies een stijl voor je foto</p>
       <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
         <div className="grid grid-cols-2 gap-px bg-black">
-          {SCENE_THEMES.map((theme) => (
-            <button
-              key={theme.id}
-              onClick={() => onSelect(theme)}
-              className={`relative p-5 text-left transition-colors ${
-                selectedTheme.id === theme.id ? "bg-black text-white" : "bg-white hover:bg-black/5"
-              }`}
-            >
-              <p className="text-xs uppercase tracking-widest font-medium leading-snug">
-                {theme.label}
-              </p>
-              {selectedTheme.id === theme.id && (
-                <span className="absolute top-3 right-3 text-[10px]">✓</span>
-              )}
-            </button>
-          ))}
+          {SCENE_THEMES.map((theme) => {
+            const selected = selectedTheme.id === theme.id;
+            return (
+              <button
+                key={theme.id}
+                onClick={() => onSelect(theme)}
+                className={`relative text-left transition-colors ${
+                  selected ? "bg-black text-white" : "bg-white hover:bg-black/5"
+                }`}
+              >
+                <div
+                  className="w-full aspect-[4/3] relative"
+                  style={{ background: `linear-gradient(145deg, ${theme.gradient[0]}, ${theme.gradient[1]})` }}
+                >
+                  {selected && (
+                    <span className="absolute top-2 right-2 w-4 h-4 bg-black text-white text-[9px] flex items-center justify-center">
+                      ✓
+                    </span>
+                  )}
+                </div>
+                <p className="px-3 py-2.5 text-xs uppercase tracking-widest font-medium leading-snug">
+                  {theme.label}
+                </p>
+              </button>
+            );
+          })}
         </div>
       </div>
       <div className="flex items-center gap-3 pt-2 border-t border-black/10">

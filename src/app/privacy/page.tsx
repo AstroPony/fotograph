@@ -1,10 +1,26 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { SITE_URL } from "@/lib/constants";
 
-export const metadata = { title: "Privacybeleid — Fotograph" };
+export const metadata: Metadata = {
+  title: "Privacybeleid",
+  description: "Lees het privacybeleid van Fotograph. Hoe wij omgaan met jouw persoonsgegevens conform de AVG.",
+  alternates: { canonical: `${SITE_URL}/privacy` },
+};
+
+const breadcrumbJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    { "@type": "ListItem", position: 1, name: "Home", item: SITE_URL },
+    { "@type": "ListItem", position: 2, name: "Privacybeleid", item: `${SITE_URL}/privacy` },
+  ],
+};
 
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen flex flex-col">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       <header className="border-b border-black">
         <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
           <Link href="/" className="font-serif font-black text-lg tracking-tight uppercase">

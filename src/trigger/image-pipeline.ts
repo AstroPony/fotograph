@@ -38,7 +38,22 @@ export const imagePipelineTask = task({
     if (!process.env.PHOTOROOM_API_KEY) throw new Error("PHOTOROOM_API_KEY is not set");
     if (!process.env.REPLICATE_API_TOKEN) throw new Error("REPLICATE_API_TOKEN is not set");
 
+    const TIER_OUTPUT_SIZE: Record<string, number> = {
+      FREE: 512,
+      STARTER: 1024,
+      PRO: OUTPUT_SIZE,
+      BUSINESS: OUTPUT_SIZE,
+    };
+
     try {
+      // 0. Fetch user tier upfront — needed for output sizing and watermark
+      const { userId, user } = await prisma.image.findUniqueOrThrow({
+        where: { id: imageId },
+        select: { userId: true, user: { select: { tier: true } } },
+      });
+      const userTier = user.tier as string;
+      const outSize = TIER_OUTPUT_SIZE[userTier] ?? OUTPUT_SIZE;
+
       // 1. Download raw image from R2
       logger.info("Downloading raw image", { rawR2Key });
       const rawObj = await r2.send(new GetObjectCommand({ Bucket: BUCKET, Key: rawR2Key }));
@@ -243,11 +258,31 @@ export const imagePipelineTask = task({
         .png()
         .toBuffer();
 
-      // 7. Upscale to OUTPUT_SIZE for Bol.com compliance, stamp EU AI Act EXIF
-      logger.info("Storing generated image with EXIF metadata");
+      // 7. Tier-aware output sizing + free-tier watermark + EU AI Act EXIF
+      logger.info("Resizing output", { userTier, outSize });
 
-      const withExif = await sharp(composited)
-        .resize(OUTPUT_SIZE, OUTPUT_SIZE, { fit: "fill" })
+      let outputBuffer = await sharp(composited)
+        .resize(outSize, outSize, { fit: "fill" })
+        .toBuffer();
+
+      if (userTier === "FREE") {
+        const barH  = Math.round(outSize * 0.08);
+        const fSize = Math.round(outSize * 0.028);
+        const wmSvg = Buffer.from(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="${outSize}" height="${outSize}">` +
+          `<rect x="0" y="${outSize - barH}" width="${outSize}" height="${barH}" fill="#000000" fill-opacity="0.5"/>` +
+          `<text x="${outSize / 2}" y="${outSize - barH / 2}" dominant-baseline="central" text-anchor="middle" ` +
+          `font-family="Arial, Helvetica, sans-serif" font-size="${fSize}" font-weight="bold" ` +
+          `letter-spacing="2" fill="#ffffff" fill-opacity="0.9">FOTOGRAPH.NL</text>` +
+          `</svg>`
+        );
+        outputBuffer = await sharp(outputBuffer)
+          .composite([{ input: wmSvg, top: 0, left: 0 }])
+          .png()
+          .toBuffer();
+      }
+
+      const withExif = await sharp(outputBuffer)
         .withMetadata({
           exif: {
             IFD0: {
@@ -270,11 +305,6 @@ export const imagePipelineTask = task({
       }));
 
       // 8. Mark done, deduct one credit
-      const { userId } = await prisma.image.findUniqueOrThrow({
-        where: { id: imageId },
-        select: { userId: true },
-      });
-
       await prisma.$transaction([
         prisma.image.update({
           where: { id: imageId },

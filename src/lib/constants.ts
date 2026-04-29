@@ -1,3 +1,5 @@
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://fotograph.nl";
+
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20 MB — safe to import in client components
 
 export type ProductId = "credits" | "starter" | "pro" | "business";

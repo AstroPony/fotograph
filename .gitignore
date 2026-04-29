@@ -40,6 +40,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# markdown files — only CLAUDE.md stays tracked
+*.md
+!CLAUDE.md
+
 # private docs — keep off the public repo
 /docs
 
