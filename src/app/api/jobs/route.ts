@@ -5,7 +5,7 @@ import { tasks } from "@trigger.dev/sdk";
 import { getDownloadUrl } from "@/lib/r2";
 import { SCENE_THEMES } from "@/lib/scenes";
 
-const VALID_SCENE_IDS = new Set(SCENE_THEMES.map((t) => t.id));
+const VALID_SCENE_IDS = new Set<string>(SCENE_THEMES.map((t) => t.id));
 const MAX_CUSTOM_PROMPT_LENGTH = 300;
 
 export async function POST(request: NextRequest) {
