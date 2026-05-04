@@ -242,8 +242,6 @@ export default async function Home() {
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-black/40 uppercase tracking-widest">
             <Link href="/voorwaarden" className="hover:text-black transition-colors">Algemene Voorwaarden</Link>
             <Link href="/privacy" className="hover:text-black transition-colors">Privacybeleid</Link>
-            <span>KVK: 97293318</span>
-            <span>BTW: [volgt]</span>
           </div>
         </footer>
       </main>

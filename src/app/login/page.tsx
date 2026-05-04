@@ -91,7 +91,7 @@ export default function LoginPage() {
               Inloggen
             </p>
             <h1 className="font-serif font-black text-4xl uppercase leading-none">
-              Welkom terug
+              Welkom
             </h1>
           </div>
 

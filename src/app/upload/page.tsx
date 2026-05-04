@@ -4,6 +4,7 @@ import { Suspense, useState, useCallback, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
+import { usePostHog } from "posthog-js/react";
 import { SCENE_THEMES } from "@/lib/scenes";
 
 type SceneTheme = typeof SCENE_THEMES[number];
@@ -33,7 +34,7 @@ function DropZone({ onFile, dragOver, setDragOver }: {
 }) {
   return (
     <label
-      className={`flex-1 flex flex-col items-center justify-center border-2 cursor-pointer transition-colors ${
+      className={`flex-1 max-h-[450px] flex flex-col items-center justify-center border-2 cursor-pointer transition-colors ${
         dragOver ? "border-black bg-black/5" : "border-black/20 hover:border-black"
       }`}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -63,9 +64,9 @@ function StepUpload({ previewFile, onFile, onNext, onReset, dragOver, setDragOve
   }
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      <div className="flex-1 min-h-0 bg-black/5 flex items-center justify-center">
+      <div className="max-h-[450px] min-h-0 bg-black/5 flex items-center justify-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={previewFile} alt="Geüpload" className="w-full max-h-[60vh] object-contain" />
+        <img src={previewFile} alt="Geüpload" className="w-full max-h-[450px] object-contain" />
       </div>
       <div className="flex items-center gap-3 mt-auto border-t border-black/10 pt-3">
         <button onClick={onReset} className="text-xs uppercase tracking-widest text-black/40 hover:text-black transition-colors underline underline-offset-4 shrink-0">
@@ -79,12 +80,18 @@ function StepUpload({ previewFile, onFile, onNext, onReset, dragOver, setDragOve
   );
 }
 
-function StepScene({ selectedTheme, onSelect, onBack, onGenerate }: {
+const MAX_USER_TEXT = 200;
+
+function StepScene({ selectedTheme, onSelect, onBack, onGenerate, userText, setUserText, tier }: {
   selectedTheme: SceneTheme;
   onSelect: (t: SceneTheme) => void;
   onBack: () => void;
   onGenerate: () => void;
+  userText: string;
+  setUserText: (t: string) => void;
+  tier: string;
 }) {
+  const canCustomise = tier !== "FREE";
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-3">
       <p className="text-xs uppercase tracking-widest text-black/50">Kies een stijl voor je foto</p>
@@ -116,6 +123,28 @@ function StepScene({ selectedTheme, onSelect, onBack, onGenerate }: {
               </button>
             );
           })}
+        </div>
+
+        <div className="mt-3">
+          <label className="block text-xs uppercase tracking-widest text-black/50 mb-1.5">
+            Voeg details toe
+            {!canCustomise && (
+              <Link href="/upgrade" className="ml-2 text-black underline underline-offset-2 hover:text-black/60">
+                — Starter vereist
+              </Link>
+            )}
+          </label>
+          <textarea
+            disabled={!canCustomise}
+            value={userText}
+            onChange={(e) => setUserText(e.target.value.slice(0, MAX_USER_TEXT))}
+            placeholder={canCustomise ? "Bijv. zomerse sfeer, strand op de achtergrond" : "Upgrade naar Starter om je eigen details toe te voegen"}
+            rows={2}
+            className="w-full border border-black/20 px-3 py-2 text-xs resize-none focus:outline-none focus:border-black disabled:bg-black/5 disabled:text-black/30 disabled:cursor-not-allowed"
+          />
+          {canCustomise && (
+            <p className="text-[10px] text-black/30 mt-1 text-right">{userText.length}/{MAX_USER_TEXT}</p>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-3 pt-2 border-t border-black/10">
@@ -194,17 +223,27 @@ function StepResult({ stage, resultUrls, onReset }: {
 function UploadPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const posthog = usePostHog();
   const [showWelcome, setShowWelcome] = useState(searchParams.get("welcome") === "1");
   const [step, setStep] = useState<Step>(1);
   const [stage, setStage] = useState<Stage>("idle");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewFile, setPreviewFile] = useState<string | null>(null);
   const [selectedTheme, setSelectedTheme] = useState<SceneTheme>(SCENE_THEMES[0]);
+  const [userText, setUserText] = useState("");
+  const [tier, setTier] = useState("FREE");
   const [resultUrls, setResultUrls] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  useEffect(() => {
+    fetch("/api/me")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.tier) setTier(d.tier); })
+      .catch(() => {});
+  }, []);
 
   const pickFile = useCallback((file: File) => {
     if (!file.type.startsWith("image/")) { toast.error("Upload een afbeelding (JPG, PNG, WEBP)"); return; }
@@ -217,6 +256,7 @@ function UploadPageInner() {
   async function generate() {
     if (!selectedFile) return;
     setStep(3);
+    posthog?.capture("generation_started", { scene: selectedTheme.id, has_custom_text: userText.trim().length > 0 });
     try {
       setStage("uploading");
       const res = await fetch("/api/upload", {
@@ -229,10 +269,13 @@ function UploadPageInner() {
       await fetch(uploadUrl, { method: "PUT", body: selectedFile, headers: { "Content-Type": selectedFile.type } });
 
       setStage("removing-bg");
+      const combinedPrompt = userText.trim()
+        ? `${selectedTheme.prompt} ${userText.trim()}`
+        : selectedTheme.prompt;
       const jobRes = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageId: id, sceneTheme: selectedTheme.id, customPrompt: selectedTheme.prompt }),
+        body: JSON.stringify({ imageId: id, sceneTheme: selectedTheme.id, customPrompt: combinedPrompt }),
       });
       if (!jobRes.ok) { const err = await jobRes.json().catch(() => ({})); throw new Error(err.error ?? "Verwerking starten mislukt"); }
 
@@ -262,6 +305,7 @@ function UploadPageInner() {
         clearInterval(pollRef.current!);
         setResultUrls(data.previewUrls ?? []);
         setStage("done");
+        posthog?.capture("generation_completed", { scene: selectedTheme.id });
       } else if (data.status === "FAILED") {
         clearInterval(pollRef.current!);
         setStage("error");
@@ -325,6 +369,9 @@ function UploadPageInner() {
             onSelect={setSelectedTheme}
             onBack={() => setStep(1)}
             onGenerate={generate}
+            userText={userText}
+            setUserText={setUserText}
+            tier={tier}
           />
         )}
         {step === 3 && (

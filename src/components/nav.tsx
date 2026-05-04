@@ -26,7 +26,10 @@ export async function Nav() {
         <Link href="/dashboard" className="font-serif font-black text-lg tracking-tight uppercase">
           Fotograph
         </Link>
-        {user && <NavLinks credits={credits} showBatch={showBatch} />}
+        <div className="flex items-center gap-4">
+          <span className="text-sm" title="Taal: Nederlands">🇳🇱</span>
+          {user && <NavLinks credits={credits} showBatch={showBatch} />}
+        </div>
       </div>
     </header>
   );

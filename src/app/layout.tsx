@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { Playfair_Display } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { PostHogProvider } from "@/components/posthog-provider";
 import { SITE_URL } from "@/lib/constants";
 import "./globals.css";
 
@@ -86,10 +87,12 @@ export default function RootLayout({
   return (
     <html lang="nl" className={`${geistSans.variable} ${playfair.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-white text-black">
-        {children}
-        <Toaster richColors position="top-right" />
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }} />
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }} />
+        <PostHogProvider>
+          {children}
+          <Toaster richColors position="top-right" />
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }} />
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }} />
+        </PostHogProvider>
       </body>
     </html>
   );

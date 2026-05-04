@@ -5,8 +5,9 @@ import { tasks } from "@trigger.dev/sdk";
 import { getDownloadUrl } from "@/lib/r2";
 import { SCENE_THEMES } from "@/lib/scenes";
 
-const VALID_SCENE_IDS = new Set<string>(SCENE_THEMES.map((t) => t.id));
-const MAX_CUSTOM_PROMPT_LENGTH = 1000;
+export const VALID_SCENE_IDS = new Set<string>(SCENE_THEMES.map((t) => t.id));
+export const MAX_CUSTOM_PROMPT_LENGTH = 1000;
+export const RATE_LIMIT_PER_HOUR = 20;
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -46,6 +47,19 @@ export async function POST(request: NextRequest) {
 
   if (!isAdmin && (!dbUser || dbUser.creditsLeft < 1)) {
     return NextResponse.json({ error: "Geen credits meer. Koop een creditpakket om door te gaan." }, { status: 402 });
+  }
+
+  if (!isAdmin) {
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recentCount = await prisma.image.count({
+      where: { user: { supabaseId: user.id }, createdAt: { gte: hourAgo } },
+    });
+    if (recentCount >= RATE_LIMIT_PER_HOUR) {
+      return NextResponse.json(
+        { error: "Je hebt het maximum van 20 foto's per uur bereikt. Probeer het over een uur opnieuw." },
+        { status: 429 }
+      );
+    }
   }
 
   const image = await prisma.image.findFirst({
