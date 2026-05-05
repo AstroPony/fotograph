@@ -141,29 +141,41 @@ export const imagePipelineTask = task({
       const maskB64  = `data:image/png;base64,${mask.toString("base64")}`;
 
       // 5. FLUX.1 Fill Pro inpainting — generates the complete scene background.
+      // Retries on 429 rate-limit responses, respecting retry_after from Replicate.
       logger.info("Generating scene with FLUX Fill Pro inpainting");
 
-      const startRes = await fetch(
-        "https://api.replicate.com/v1/models/black-forest-labs/flux-fill-pro/predictions",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            input: {
-              image: imageB64,
-              mask: maskB64,
-              prompt: finalPrompt,
-              guidance: 30,
-              steps: 25,
-              safety_tolerance: 2,
-              output_format: "png",
+      const replicateBody = JSON.stringify({
+        input: {
+          image: imageB64,
+          mask: maskB64,
+          prompt: finalPrompt,
+          guidance: 30,
+          steps: 25,
+          safety_tolerance: 2,
+          output_format: "png",
+        },
+      });
+
+      let startRes!: Response;
+      for (let attempt = 0; attempt <= 8; attempt++) {
+        startRes = await fetch(
+          "https://api.replicate.com/v1/models/black-forest-labs/flux-fill-pro/predictions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}`,
+              "Content-Type": "application/json",
             },
-          }),
-        }
-      );
+            body: replicateBody,
+          }
+        );
+        if (startRes.status !== 429) break;
+        const rateLimitBody = await startRes.json().catch(() => ({}));
+        const waitSecs = (rateLimitBody.retry_after as number | undefined) ?? 10;
+        logger.warn("Replicate rate limited, waiting to retry", { waitSecs, attempt: attempt + 1 });
+        await new Promise((resolve) => setTimeout(resolve, waitSecs * 1000));
+      }
+
       if (!startRes.ok) {
         throw new Error(`Replicate start error: ${await startRes.text()}`);
       }
