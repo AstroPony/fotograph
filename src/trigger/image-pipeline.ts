@@ -31,8 +31,8 @@ export const imagePipelineTask = task({
 
     const sceneBase = SCENE_PROMPTS[sceneTheme] ?? "";
     const userPrompt = customPrompt ? `${sceneBase} ${customPrompt}`.trim() : sceneBase;
-    // Global safety suffix: prevent text hallucinations, people, and unwanted practical effects
-    const finalPrompt = `${userPrompt} No text, no writing, no typography, no watermarks, no smoke, no mist, no cables, no cords, no people, no models, no mannequins.`;
+    // Global safety suffix: prevent text, people, and props that would conflict with product compositing
+    const finalPrompt = `${userPrompt} No text, no writing, no typography, no watermarks, no smoke, no mist, no cables, no cords, no people, no models, no mannequins, no glowing objects, no pedestals, no platforms, no raised bases, no props in the foreground.`;
 
     if (!BUCKET) throw new Error("CLOUDFLARE_R2_BUCKET_NAME is not set");
     if (!process.env.PHOTOROOM_API_KEY) throw new Error("PHOTOROOM_API_KEY is not set");
