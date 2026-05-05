@@ -118,55 +118,35 @@ export const imagePipelineTask = task({
       const pLeft = Math.round((SIZE - pw!) / 2);
       const pTop  = Math.round(SIZE * 0.76 - ph!);
 
-      // 4. Build inpainting canvas and mask for FLUX Fill Pro.
+      // 4. Build canvas and mask for FLUX Fill Pro.
       //
-      // Canvas: gray RGB 1024×1024 with the product composited in position.
-      //   FLUX can see the product's shape/colour and generate a contextually
-      //   consistent scene around it (correct lighting direction, shadow cues).
+      // Canvas: plain gray RGB 1024×1024 — no product composited.
+      // Mask:   all WHITE — FLUX generates the full background scene from scratch.
       //
-      // Mask: WHITE (255) = generate scene, BLACK (0) = preserve product area.
-      //   FLUX Fill Pro is a non-distilled model with proper CFG guidance, so
-      //   it respects the black (keep) region far better than Fill Dev did.
-      //   Even so, we re-composite the clean Photoroom cutout on top afterwards
-      //   as a hard pixel-integrity guarantee — no diffusion distortion possible.
+      // The clean Photoroom cutout (+ shadow) is composited in step 7 as the sole
+      // copy of the product. Previously we preserved the product area with a black
+      // mask, but FLUX Fill Pro slightly shifts the preserved pixels, causing a
+      // double-product ghost when the cutout is re-composited on top.
       logger.info("Building inpainting canvas and mask");
 
       const canvas = await sharp({
         create: { width: SIZE, height: SIZE, channels: 3, background: { r: 128, g: 128, b: 128 } },
       })
-        .composite([{ input: productFit, left: pLeft, top: pTop }])
         .png()
         .toBuffer();
-
-      // Build a 3-channel RGB mask: white canvas, black product footprint.
-      // Use joinChannel to merge a binary alpha silhouette onto a black RGB base,
-      // then composite the resulting RGBA onto a white canvas (alpha blending makes
-      // product area go black, surrounding area stays white).
-      const productAlpha = await sharp(productFit)
-        .extractChannel("alpha")
-        .threshold(128)   // binarise Photoroom's feathered edges
-        .png()
-        .toBuffer();
-
-      const blackBase = await sharp({
-        create: { width: pw!, height: ph!, channels: 3, background: { r: 0, g: 0, b: 0 } },
-      }).png().toBuffer();
-
-      const blackProductRGBA = await sharp(blackBase).joinChannel(productAlpha).png().toBuffer();
 
       const mask = await sharp({
         create: { width: SIZE, height: SIZE, channels: 3, background: { r: 255, g: 255, b: 255 } },
       })
-        .composite([{ input: blackProductRGBA, left: pLeft, top: pTop }])
         .png()
         .toBuffer();
 
       const imageB64 = `data:image/png;base64,${canvas.toString("base64")}`;
       const maskB64  = `data:image/png;base64,${mask.toString("base64")}`;
 
-      // 5. FLUX.1 Fill Pro inpainting — generates contextual scene, lighting, and
-      //    shadows around the product. Fill Pro uses proper CFG guidance (not the
-      //    distilled architecture of Fill Dev that caused deformation).
+      // 5. FLUX.1 Fill Pro inpainting — generates the full background scene.
+      //    Fill Pro uses proper CFG guidance (not the distilled architecture of
+      //    Fill Dev that caused mask non-compliance and deformation).
       logger.info("Generating scene with FLUX Fill Pro inpainting");
 
       const startRes = await fetch(
@@ -182,10 +162,10 @@ export const imagePipelineTask = task({
               image: imageB64,
               mask: maskB64,
               prompt: finalPrompt,
-              // guidance: Fill Dev (distilled) used 30 as its special guidance parameter.
-              // Fill Pro (non-distilled) may use standard CFG (~3.5-7) OR keep the Fill
-              // convention of 30. Using 30 here — tune down if output looks overcooked.
-              guidance: 30,
+              // Fill Pro is non-distilled — standard CFG range applies (~3.5–7).
+              // Fill Dev used 30 as a distilled-model convention; using that value here
+              // caused over-conditioning and contributed to double-product artifacts.
+              guidance: 7,
               steps: 25,
               // safety_tolerance: Fill Pro parameter (0=strict, 2=permissive for products).
               // May not exist on all model versions — benign if ignored by Replicate.

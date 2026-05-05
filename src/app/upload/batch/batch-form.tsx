@@ -87,7 +87,7 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
     const jobRes = await fetch("/api/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imageId, sceneTheme: selectedTheme.id, customPrompt: selectedTheme.prompt }),
+      body: JSON.stringify({ imageId, sceneTheme: selectedTheme.id, customPrompt: "" }),
     });
     if (!jobRes.ok) {
       const err = await jobRes.json().catch(() => ({}));
