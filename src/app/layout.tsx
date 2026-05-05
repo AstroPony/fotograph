@@ -3,6 +3,7 @@ import { Geist } from "next/font/google";
 import { Playfair_Display } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { PostHogProvider } from "@/components/posthog-provider";
+import { LanguageProvider } from "@/components/language-provider";
 import { SITE_URL } from "@/lib/constants";
 import "./globals.css";
 
@@ -88,10 +89,12 @@ export default function RootLayout({
     <html lang="nl" className={`${geistSans.variable} ${playfair.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-white text-black">
         <PostHogProvider>
+          <LanguageProvider>
           {children}
           <Toaster richColors position="top-right" />
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }} />
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }} />
+          </LanguageProvider>
         </PostHogProvider>
       </body>
     </html>

@@ -4,6 +4,8 @@ import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { SCENE_THEMES } from "@/lib/scenes";
 import { MAX_UPLOAD_BYTES } from "@/lib/constants";
+import { useLanguage } from "@/components/language-provider";
+import type { TranslationKey } from "@/lib/translations";
 
 type SceneTheme = typeof SCENE_THEMES[number];
 type FileStatus = "queued" | "uploading" | "processing" | "done" | "error";
@@ -17,6 +19,7 @@ interface BatchFile {
 }
 
 export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; creditsLeft: number }) {
+  const { t } = useLanguage();
   const [files, setFiles] = useState<BatchFile[]>([]);
   const [selectedTheme, setSelectedTheme] = useState<SceneTheme>(SCENE_THEMES[0]);
   const [running, setRunning] = useState(false);
@@ -24,6 +27,14 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
   const pollRefs = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
   const effectiveLimit = Math.min(batchLimit, creditsLeft);
+
+  const STATUS_KEY: Record<FileStatus, TranslationKey> = {
+    queued: "status_queued",
+    uploading: "status_uploading",
+    processing: "status_processing",
+    done: "status_done",
+    error: "status_error",
+  };
 
   const addFiles = useCallback((incoming: FileList | File[]) => {
     const arr = Array.from(incoming);
@@ -35,7 +46,7 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
 
     setFiles((prev) => {
       const slots = effectiveLimit - prev.length;
-      if (slots <= 0) { toast.error(`Maximum van ${effectiveLimit} foto's bereikt`); return prev; }
+      if (slots <= 0) { toast.error(t("max_reached")); return prev; }
       const add = valid.slice(0, slots);
       if (valid.length > slots) toast.error(`Alleen de eerste ${slots} foto's zijn toegevoegd`);
       return [
@@ -48,7 +59,7 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
         })),
       ];
     });
-  }, [effectiveLimit]);
+  }, [effectiveLimit, t]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -78,7 +89,7 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
     });
     if (!uploadRes.ok) {
       const err = await uploadRes.json().catch(() => ({}));
-      throw new Error(err.error ?? "Upload mislukt");
+      throw new Error(err.error ?? t("error_upload_failed"));
     }
     const { uploadUrl, imageId } = await uploadRes.json();
 
@@ -91,7 +102,7 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
     });
     if (!jobRes.ok) {
       const err = await jobRes.json().catch(() => ({}));
-      throw new Error(err.error ?? "Verwerking starten mislukt");
+      throw new Error(err.error ?? t("error_start_failed"));
     }
 
     updateStatus(bf.id, "processing", imageId);
@@ -127,16 +138,12 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
         await processFile(bf);
       } catch (err) {
         updateStatus(bf.id, "error");
-        toast.error(`${bf.file.name}: ${err instanceof Error ? err.message : "Fout"}`);
+        toast.error(`${bf.file.name}: ${err instanceof Error ? err.message : t("status_error")}`);
       }
     }
     setRunning(false);
-    toast.success("Alle foto's zijn verstuurd — resultaten verschijnen op het dashboard.");
+    toast.success(t("batch_sent"));
   }
-
-  const STATUS_LABEL: Record<FileStatus, string> = {
-    queued: "Wacht", uploading: "Uploaden", processing: "Bezig", done: "Klaar", error: "Fout",
-  };
 
   const queued = files.filter((f) => f.status === "queued").length;
   const done = files.filter((f) => f.status === "done").length;
@@ -147,7 +154,7 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
       {/* Scene selector */}
       <div>
         <h2 className="text-xs uppercase tracking-widest font-medium border-b border-black pb-1 mb-4">
-          01 — Scène (voor alle foto&apos;s)
+          {t("scene_for_all")}
         </h2>
         <div className="flex flex-wrap gap-px bg-black/10 border border-black/10">
           {SCENE_THEMES.map((theme) => (
@@ -159,7 +166,7 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
                 selectedTheme.id === theme.id ? "bg-black text-white" : "bg-white hover:bg-black/5 disabled:opacity-40"
               }`}
             >
-              {theme.label}
+              {t(`scene_${theme.id}` as TranslationKey)}
             </button>
           ))}
         </div>
@@ -168,7 +175,7 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
       {/* Drop zone */}
       <div>
         <h2 className="text-xs uppercase tracking-widest font-medium border-b border-black pb-1 mb-4">
-          02 — Foto&apos;s ({files.length}/{effectiveLimit})
+          {t("photos_label")} ({files.length}/{effectiveLimit})
         </h2>
         <label
           className={`flex flex-col items-center justify-center py-10 border-2 cursor-pointer transition-colors ${
@@ -178,8 +185,8 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
         >
-          <p className="font-serif font-bold text-xl uppercase mb-1">Sleep foto&apos;s hier</p>
-          <p className="text-xs uppercase tracking-widest text-black/40">of klik om te bladeren · max {effectiveLimit} foto&apos;s</p>
+          <p className="font-serif font-bold text-xl uppercase mb-1">{t("drop_photos")}</p>
+          <p className="text-xs uppercase tracking-widest text-black/40">{t("or_browse_max")} {effectiveLimit} {t("photos_unit")}</p>
           <input
             type="file"
             multiple
@@ -205,7 +212,7 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
                     <span className={`text-[10px] uppercase tracking-widest font-medium ${
                       bf.status === "done" ? "text-black" : bf.status === "error" ? "text-black/40" : "text-black animate-pulse"
                     }`}>
-                      {STATUS_LABEL[bf.status]}
+                      {t(STATUS_KEY[bf.status])}
                     </span>
                   )}
                 </div>
@@ -224,14 +231,15 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
           {/* Summary + action */}
           <div className="flex items-center justify-between border border-black px-4 py-3">
             <p className="text-xs uppercase tracking-widest font-medium text-black/60">
-              {queued} wacht · {done} klaar{errored > 0 ? ` · ${errored} fout` : ""}
+              {queued} {t("status_queued").toLowerCase()} · {done} {t("status_done").toLowerCase()}
+              {errored > 0 ? ` · ${errored} ${t("status_error").toLowerCase()}` : ""}
             </p>
             <button
               onClick={startBatch}
               disabled={running || queued === 0}
               className="bg-black text-white px-6 py-2 text-xs uppercase tracking-widest font-medium hover:bg-black/80 transition-colors disabled:opacity-40"
             >
-              {running ? "Bezig…" : `Start batch (${queued})`}
+              {running ? t("starting") : `${t("start_batch")} (${queued})`}
             </button>
           </div>
         </div>

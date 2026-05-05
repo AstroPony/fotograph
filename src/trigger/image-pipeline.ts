@@ -31,8 +31,8 @@ export const imagePipelineTask = task({
 
     const sceneBase = SCENE_PROMPTS[sceneTheme] ?? "";
     const userPrompt = customPrompt ? `${sceneBase} ${customPrompt}`.trim() : sceneBase;
-    // Global safety suffix: prevent text hallucinations and unwanted practical effects
-    const finalPrompt = `${userPrompt} No text, no writing, no typography, no watermarks, no smoke, no mist, no cables, no cords.`;
+    // Global safety suffix: prevent text hallucinations, people, and unwanted practical effects
+    const finalPrompt = `${userPrompt} No text, no writing, no typography, no watermarks, no smoke, no mist, no cables, no cords, no people, no models, no mannequins.`;
 
     if (!BUCKET) throw new Error("CLOUDFLARE_R2_BUCKET_NAME is not set");
     if (!process.env.PHOTOROOM_API_KEY) throw new Error("PHOTOROOM_API_KEY is not set");
@@ -107,8 +107,8 @@ export const imagePipelineTask = task({
         logger.info("Usage alert sent", { usedThisMonth, threshold: crossed });
       }
 
-      // 3. Resize product and compute placement
-      // Base anchored at 76% of canvas height so the product sits on the scene surface.
+      // 3. Resize product and compute placement.
+      // Product bottom anchored at 76% canvas height so it sits on the scene surface.
       const productFit = await sharp(bgRemovedBuffer)
         .resize(PRODUCT_MAX, PRODUCT_MAX, { fit: "inside" })
         .ensureAlpha()
@@ -118,49 +118,29 @@ export const imagePipelineTask = task({
       const pLeft = Math.round((SIZE - pw!) / 2);
       const pTop  = Math.round(SIZE * 0.76 - ph!);
 
-      // 4. Build inpainting canvas and mask for FLUX Fill Pro.
+      // 4. Build blank canvas and all-white mask for FLUX Fill Pro.
       //
-      // Canvas: gray RGB 1024×1024 with the product composited in position.
-      //   FLUX can see the product's shape/colour and generate a contextually
-      //   consistent scene around it (correct lighting direction, shadow cues).
+      // Canvas: uniform gray 1024×1024 — no product. FLUX generates the complete
+      //   scene from scratch guided entirely by the text prompt.
       //
-      // Mask: WHITE (255) = generate scene, BLACK (0) = preserve product area.
-      //   The preserved area is blanked before re-compositing in step 6 so FLUX's
-      //   slightly-shifted pixel copy never overlaps the clean cutout.
-      logger.info("Building inpainting canvas and mask");
+      // Mask: all-white — FLUX regenerates every pixel. The product is composited
+      //   onto the finished scene in step 6, so there is nothing to preserve here.
+      //   Scene prompts explicitly describe an empty center foreground, preventing
+      //   FLUX from filling that space with unexpected objects or people.
+      logger.info("Building blank canvas and full-generation mask");
 
       const canvas = await sharp({
         create: { width: SIZE, height: SIZE, channels: 3, background: { r: 128, g: 128, b: 128 } },
-      })
-        .composite([{ input: productFit, left: pLeft, top: pTop }])
-        .png()
-        .toBuffer();
-
-      const productAlpha = await sharp(productFit)
-        .extractChannel("alpha")
-        .threshold(128)
-        .png()
-        .toBuffer();
-
-      const blackBase = await sharp({
-        create: { width: pw!, height: ph!, channels: 3, background: { r: 0, g: 0, b: 0 } },
       }).png().toBuffer();
-
-      const blackProductRGBA = await sharp(blackBase).joinChannel(productAlpha).png().toBuffer();
 
       const mask = await sharp({
         create: { width: SIZE, height: SIZE, channels: 3, background: { r: 255, g: 255, b: 255 } },
-      })
-        .composite([{ input: blackProductRGBA, left: pLeft, top: pTop }])
-        .png()
-        .toBuffer();
+      }).png().toBuffer();
 
       const imageB64 = `data:image/png;base64,${canvas.toString("base64")}`;
       const maskB64  = `data:image/png;base64,${mask.toString("base64")}`;
 
-      // 5. FLUX.1 Fill Pro inpainting — generates contextual scene, lighting, and
-      //    shadows around the product. Fill Pro uses proper CFG guidance (not the
-      //    distilled architecture of Fill Dev that caused deformation).
+      // 5. FLUX.1 Fill Pro inpainting — generates the complete scene background.
       logger.info("Generating scene with FLUX Fill Pro inpainting");
 
       const startRes = await fetch(
@@ -178,8 +158,6 @@ export const imagePipelineTask = task({
               prompt: finalPrompt,
               guidance: 30,
               steps: 25,
-              // safety_tolerance: Fill Pro parameter (0=strict, 2=permissive for products).
-              // May not exist on all model versions — benign if ignored by Replicate.
               safety_tolerance: 2,
               output_format: "png",
             },
@@ -218,7 +196,7 @@ export const imagePipelineTask = task({
       const inpaintedBuffer = Buffer.from(await generatedRes.arrayBuffer());
 
       // 6. Add AI contact shadow to the clean cutout via Photoroom Shadow API,
-      //    then composite the result onto the FLUX scene.
+      //    then composite onto the FLUX scene.
       //    Shadow is requested on the transparent cutout so it alpha-blends naturally
       //    onto the FLUX-generated surface. Gracefully falls back to no shadow on error.
       logger.info("Adding contact shadow via Photoroom");
@@ -241,26 +219,14 @@ export const imagePipelineTask = task({
         logger.warn("Photoroom shadow skipped", { status: shadowRes.status, body: await shadowRes.text() });
       }
 
+      // Composite the clean product cutout onto the FLUX-generated scene.
+      // No blanking step needed — FLUX never saw the product, so there is no
+      // shifted copy to remove.
       logger.info("Compositing product onto inpainted scene");
-
-      // Blank the product footprint before placing the clean cutout.
-      // FLUX Fill Pro slightly shifts its preserved (black-mask) pixels, so
-      // compositing the cutout at the original coordinates without clearing
-      // first produces two misaligned overlapping copies of the product.
-      // The gray patch is alpha-shaped to the product silhouette (reusing
-      // productAlpha from step 4) so transparent regions — arm gaps, lens
-      // cutouts — show the FLUX scene, not a solid gray box.
-      const grayBase = await sharp({
-        create: { width: pw!, height: ph!, channels: 3, background: { r: 128, g: 128, b: 128 } },
-      }).png().toBuffer();
-      const shapedGray = await sharp(grayBase).joinChannel(productAlpha).png().toBuffer();
 
       const composited = await sharp(inpaintedBuffer)
         .resize(SIZE, SIZE, { fit: "cover" })
-        .composite([
-          { input: shapedGray, left: pLeft, top: pTop },
-          { input: productToComposite, left: pLeft, top: pTop },
-        ])
+        .composite([{ input: productToComposite, left: pLeft, top: pTop }])
         .png()
         .toBuffer();
 

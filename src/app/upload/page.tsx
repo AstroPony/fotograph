@@ -6,24 +6,14 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { usePostHog } from "posthog-js/react";
 import { SCENE_THEMES } from "@/lib/scenes";
+import { useLanguage } from "@/components/language-provider";
+import type { TranslationKey } from "@/lib/translations";
 
 type SceneTheme = typeof SCENE_THEMES[number];
 // step=3 is only reachable via generate() which always transitions stage away from idle/ready.
 // Invariant: step === 3 → stage ∈ {uploading, removing-bg, generating, done, error}
 type Stage = "idle" | "ready" | "uploading" | "removing-bg" | "generating" | "done" | "error";
 type Step = 1 | 2 | 3;
-
-const STAGE_LABELS: Partial<Record<Stage, string>> = {
-  uploading: "Uploaden...",
-  "removing-bg": "Achtergrond verwijderen...",
-  generating: "Scène genereren...",
-};
-
-const STEP_LABELS: Record<Step, (stage: Stage) => string> = {
-  1: () => "Foto",
-  2: () => "Scène",
-  3: (stage) => stage === "done" ? "Klaar" : stage === "error" ? "Mislukt" : "Genereren",
-};
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -32,6 +22,7 @@ function DropZone({ onFile, dragOver, setDragOver }: {
   dragOver: boolean;
   setDragOver: (v: boolean) => void;
 }) {
+  const { t } = useLanguage();
   return (
     <label
       className={`flex-1 max-h-[450px] flex flex-col items-center justify-center border-2 cursor-pointer transition-colors ${
@@ -42,9 +33,9 @@ function DropZone({ onFile, dragOver, setDragOver }: {
       onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) onFile(f); }}
     >
       <div className="text-center pointer-events-none py-12 px-8">
-        <p className="font-serif font-bold text-3xl uppercase mb-3">Sleep hier</p>
-        <p className="text-xs uppercase tracking-widest text-black/40">of klik om te bladeren</p>
-        <p className="text-xs text-black/30 mt-2">JPG · PNG · WEBP · max 20MB</p>
+        <p className="font-serif font-bold text-3xl uppercase mb-3">{t("drop_here")}</p>
+        <p className="text-xs uppercase tracking-widest text-black/40">{t("or_browse")}</p>
+        <p className="text-xs text-black/30 mt-2">{t("file_types")}</p>
       </div>
       <input type="file" className="hidden" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
     </label>
@@ -59,6 +50,7 @@ function StepUpload({ previewFile, onFile, onNext, onReset, dragOver, setDragOve
   dragOver: boolean;
   setDragOver: (v: boolean) => void;
 }) {
+  const { t } = useLanguage();
   if (!previewFile) {
     return <DropZone onFile={onFile} dragOver={dragOver} setDragOver={setDragOver} />;
   }
@@ -70,10 +62,10 @@ function StepUpload({ previewFile, onFile, onNext, onReset, dragOver, setDragOve
       </div>
       <div className="flex items-center gap-3 mt-auto border-t border-black/10 pt-3">
         <button onClick={onReset} className="text-xs uppercase tracking-widest text-black/40 hover:text-black transition-colors underline underline-offset-4 shrink-0">
-          Andere foto
+          {t("change_photo")}
         </button>
         <button onClick={onNext} className="flex-1 bg-black text-white px-6 py-4 text-xs uppercase tracking-widest font-medium hover:bg-black/80 transition-colors">
-          Selecteer scène →
+          {t("select_scene")}
         </button>
       </div>
     </div>
@@ -91,14 +83,16 @@ function StepScene({ selectedTheme, onSelect, onBack, onGenerate, userText, setU
   setUserText: (t: string) => void;
   tier: string;
 }) {
+  const { t } = useLanguage();
   const canCustomise = tier !== "FREE";
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-3">
-      <p className="text-xs uppercase tracking-widest text-black/50">Kies een stijl voor je foto</p>
+      <p className="text-xs uppercase tracking-widest text-black/50">{t("choose_style")}</p>
       <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
         <div className="grid grid-cols-2 gap-px bg-black">
           {SCENE_THEMES.map((theme) => {
             const selected = selectedTheme.id === theme.id;
+            const sceneKey = `scene_${theme.id}` as TranslationKey;
             return (
               <button
                 key={theme.id}
@@ -118,7 +112,7 @@ function StepScene({ selectedTheme, onSelect, onBack, onGenerate, userText, setU
                   )}
                 </div>
                 <p className="px-3 py-2.5 text-xs uppercase tracking-widest font-medium leading-snug">
-                  {theme.label}
+                  {t(sceneKey)}
                 </p>
               </button>
             );
@@ -127,10 +121,10 @@ function StepScene({ selectedTheme, onSelect, onBack, onGenerate, userText, setU
 
         <div className="mt-3">
           <label className="block text-xs uppercase tracking-widest text-black/50 mb-1.5">
-            Voeg details toe
+            {t("add_details")}
             {!canCustomise && (
               <Link href="/upgrade" className="ml-2 text-black underline underline-offset-2 hover:text-black/60">
-                — Starter vereist
+                {t("starter_required")}
               </Link>
             )}
           </label>
@@ -138,7 +132,7 @@ function StepScene({ selectedTheme, onSelect, onBack, onGenerate, userText, setU
             disabled={!canCustomise}
             value={userText}
             onChange={(e) => setUserText(e.target.value.slice(0, MAX_USER_TEXT))}
-            placeholder={canCustomise ? "Bijv. zomerse sfeer, strand op de achtergrond" : "Upgrade naar Starter om je eigen details toe te voegen"}
+            placeholder={canCustomise ? t("custom_placeholder") : t("upgrade_for_custom")}
             rows={2}
             className="w-full border border-black/20 px-3 py-2 text-xs resize-none focus:outline-none focus:border-black disabled:bg-black/5 disabled:text-black/30 disabled:cursor-not-allowed"
           />
@@ -149,10 +143,10 @@ function StepScene({ selectedTheme, onSelect, onBack, onGenerate, userText, setU
       </div>
       <div className="flex items-center gap-3 pt-2 border-t border-black/10">
         <button onClick={onBack} className="text-xs uppercase tracking-widest text-black/40 hover:text-black transition-colors shrink-0">
-          ← Terug
+          {t("back")}
         </button>
         <button onClick={onGenerate} className="flex-1 bg-black text-white px-6 py-4 text-xs uppercase tracking-widest font-medium hover:bg-black/80 transition-colors">
-          Genereer foto →
+          {t("generate")}
         </button>
       </div>
     </div>
@@ -164,13 +158,22 @@ function StepResult({ stage, resultUrls, onReset }: {
   resultUrls: string[];
   onReset: () => void;
 }) {
+  const { t } = useLanguage();
+
+  const stageLabel = (): string => {
+    if (stage === "uploading") return t("uploading");
+    if (stage === "removing-bg") return t("removing_bg");
+    if (stage === "generating") return t("generating");
+    return t("processing");
+  };
+
   if (stage === "error") {
     return (
       <div className="flex flex-col flex-1 min-h-0 items-center justify-center gap-6">
-        <p className="font-serif font-black text-3xl uppercase">Mislukt</p>
-        <p className="text-xs uppercase tracking-widest text-black/40">Er is iets misgegaan</p>
+        <p className="font-serif font-black text-3xl uppercase">{t("failed")}</p>
+        <p className="text-xs uppercase tracking-widest text-black/40">{t("something_wrong")}</p>
         <button onClick={onReset} className="border border-black px-6 py-3 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors">
-          Opnieuw proberen
+          {t("try_again")}
         </button>
       </div>
     );
@@ -185,13 +188,13 @@ function StepResult({ stage, resultUrls, onReset }: {
         </div>
         <div className="flex flex-col gap-2 mt-auto border-t border-black/10 pt-3">
           <a href={resultUrls[0]} download className="w-full bg-black text-white px-6 py-4 text-xs uppercase tracking-widest font-medium hover:bg-black/80 transition-colors text-center">
-            Downloaden
+            {t("download")}
           </a>
           <button onClick={onReset} className="w-full border border-black px-6 py-3 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors">
-            Nog een foto
+            {t("another_photo")}
           </button>
           <Link href="/dashboard" className="w-full border border-black/30 px-6 py-3 text-xs uppercase tracking-widest font-medium text-black/40 hover:border-black hover:text-black transition-colors text-center">
-            Bekijk al je foto&apos;s →
+            {t("view_all")}
           </Link>
         </div>
       </div>
@@ -203,15 +206,15 @@ function StepResult({ stage, resultUrls, onReset }: {
       <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-6">
         <div className="w-16 h-16 border-2 border-black/10 border-t-black rounded-full animate-spin" />
         <p className="text-xs uppercase tracking-widest font-medium animate-pulse">
-          {STAGE_LABELS[stage] ?? "Bezig..."}
+          {stageLabel()}
         </p>
         <p className="text-[10px] uppercase tracking-widest text-black/30 text-center max-w-xs">
-          Dit duurt ongeveer 30–60 seconden.<br />Je kunt de pagina veilig sluiten.
+          {t("processing_time")}<br />{t("safe_to_close")}
         </p>
       </div>
       <div className="mt-auto border-t border-black/10 pt-3">
         <button onClick={onReset} className="text-[10px] uppercase tracking-widest text-black/30 hover:text-black transition-colors">
-          Verbergen
+          {t("hide")}
         </button>
       </div>
     </div>
@@ -224,6 +227,7 @@ function UploadPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const posthog = usePostHog();
+  const { t } = useLanguage();
   const [showWelcome, setShowWelcome] = useState(searchParams.get("welcome") === "1");
   const [step, setStep] = useState<Step>(1);
   const [stage, setStage] = useState<Stage>("idle");
@@ -246,12 +250,12 @@ function UploadPageInner() {
   }, []);
 
   const pickFile = useCallback((file: File) => {
-    if (!file.type.startsWith("image/")) { toast.error("Upload een afbeelding (JPG, PNG, WEBP)"); return; }
-    if (file.size > 20 * 1024 * 1024) { toast.error("Bestand is te groot (max 20MB)"); return; }
+    if (!file.type.startsWith("image/")) { toast.error(t("error_not_image")); return; }
+    if (file.size > 20 * 1024 * 1024) { toast.error(t("error_too_large")); return; }
     setSelectedFile(file);
     setPreviewFile(URL.createObjectURL(file));
     setStage("ready");
-  }, []);
+  }, [t]);
 
   async function generate() {
     if (!selectedFile) return;
@@ -264,26 +268,23 @@ function UploadPageInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contentType: selectedFile.type, filename: selectedFile.name, fileSize: selectedFile.size }),
       });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.error ?? "Upload mislukt"); }
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error ?? t("error_upload_failed")); }
       const { uploadUrl, imageId: id } = await res.json();
       await fetch(uploadUrl, { method: "PUT", body: selectedFile, headers: { "Content-Type": selectedFile.type } });
 
       setStage("removing-bg");
-      const combinedPrompt = userText.trim()
-        ? `${selectedTheme.prompt} ${userText.trim()}`
-        : selectedTheme.prompt;
       const jobRes = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageId: id, sceneTheme: selectedTheme.id, customPrompt: combinedPrompt }),
+        body: JSON.stringify({ imageId: id, sceneTheme: selectedTheme.id, customPrompt: userText.trim() }),
       });
-      if (!jobRes.ok) { const err = await jobRes.json().catch(() => ({})); throw new Error(err.error ?? "Verwerking starten mislukt"); }
+      if (!jobRes.ok) { const err = await jobRes.json().catch(() => ({})); throw new Error(err.error ?? t("error_start_failed")); }
 
       setStage("generating");
       pollStatus(id);
     } catch (err) {
       setStage("error");
-      toast.error(err instanceof Error ? err.message : "Onbekende fout");
+      toast.error(err instanceof Error ? err.message : t("something_wrong"));
     }
   }
 
@@ -293,7 +294,7 @@ function UploadPageInner() {
       if (Date.now() - startedAt > 3 * 60 * 1000) {
         clearInterval(pollRef.current!);
         setStage("error");
-        toast.error("Verwerking duurt te lang. Probeer opnieuw.");
+        toast.error(t("error_timeout"));
         return;
       }
       const res = await fetch(`/api/jobs?imageId=${id}`);
@@ -309,10 +310,16 @@ function UploadPageInner() {
       } else if (data.status === "FAILED") {
         clearInterval(pollRef.current!);
         setStage("error");
-        toast.error("Genereren mislukt. Probeer opnieuw.");
+        toast.error(t("error_generate_failed"));
       }
     }, 2000);
   }
+
+  const stepLabel = (s: Step): string => {
+    if (s === 1) return t("step_photo");
+    if (s === 2) return t("step_scene");
+    return stage === "done" ? t("step_done") : stage === "error" ? t("step_failed") : t("step_generating");
+  };
 
   function reset() {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -327,8 +334,8 @@ function UploadPageInner() {
         {showWelcome && (
           <div className="border border-black bg-black text-white px-6 py-4 mb-6 flex items-center justify-between gap-4">
             <div>
-              <p className="text-xs uppercase tracking-widest font-medium text-white/50 mb-0.5">Welkom bij Fotograph</p>
-              <p className="text-sm font-medium">Je hebt <strong>10 gratis credits</strong> — elke credit = één productfoto.</p>
+              <p className="text-xs uppercase tracking-widest font-medium text-white/50 mb-0.5">{t("welcome_title")}</p>
+              <p className="text-sm font-medium">{t("welcome_prefix")} <strong>{t("welcome_credits")}</strong> — {t("welcome_suffix")}</p>
             </div>
             <button
               onClick={() => { setShowWelcome(false); router.replace("/upload", { scroll: false }); }}
@@ -345,11 +352,11 @@ function UploadPageInner() {
               <div key={s} className={`w-2 h-2 rounded-full transition-colors ${step === s ? "bg-black" : step > s ? "bg-black/40" : "bg-black/15"}`} />
             ))}
             <span className="text-xs uppercase tracking-widest text-black/40 ml-1">
-              {STEP_LABELS[step](stage)}
+              {stepLabel(step)}
             </span>
           </div>
           <Link href="/dashboard" className="text-xs uppercase tracking-widest text-black/40 hover:text-black transition-colors">
-            ← Dashboard
+            {t("back_dashboard")}
           </Link>
         </div>
 

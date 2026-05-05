@@ -1,21 +1,18 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useLanguage } from "./language-provider";
+import type { Lang } from "@/lib/translations";
 
-const LANGS = [
+const LANGS: { code: Lang; flag: string; label: string }[] = [
   { code: "nl", flag: "🇳🇱", label: "Nederlands" },
   { code: "en", flag: "🇬🇧", label: "English" },
 ];
 
 export function LangSwitcher() {
-  const [lang, setLang] = useState("nl");
+  const { lang, setLang } = useLanguage();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const stored = localStorage.getItem("lang");
-    if (stored === "en" || stored === "nl") setLang(stored);
-  }, []);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -25,9 +22,8 @@ export function LangSwitcher() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  function select(code: string) {
+  function select(code: Lang) {
     setLang(code);
-    localStorage.setItem("lang", code);
     setOpen(false);
   }
 

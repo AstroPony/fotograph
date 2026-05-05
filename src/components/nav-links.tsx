@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useLanguage } from "./language-provider";
 
 interface NavLinksProps {
   credits: number;
@@ -12,6 +13,7 @@ interface NavLinksProps {
 export function NavLinks({ credits, showBatch }: NavLinksProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const { t } = useLanguage();
 
   function active(href: string) {
     if (href === "/upload") return pathname === "/upload";
@@ -21,14 +23,16 @@ export function NavLinks({ credits, showBatch }: NavLinksProps) {
   const linkClass = (href: string) =>
     `hover:underline underline-offset-4 transition-opacity ${active(href) ? "underline" : "opacity-60 hover:opacity-100"}`;
 
+  const creditsLabel = credits >= 99999 ? "∞ credits" : `${credits} credit${credits !== 1 ? "s" : ""}`;
+
   const links = (
     <>
       <Link href="/upload" className={linkClass("/upload")}>
-        Nieuwe foto
+        {t("new_photo")}
       </Link>
       {showBatch && (
         <Link href="/upload/batch" className={linkClass("/upload/batch")}>
-          Batch
+          {t("batch")}
         </Link>
       )}
       <Link
@@ -39,7 +43,7 @@ export function NavLinks({ credits, showBatch }: NavLinksProps) {
             : "border-black hover:bg-black hover:text-white"
         }`}
       >
-        {credits >= 99999 ? "∞ credits" : `${credits} credit${credits !== 1 ? "s" : ""}`}
+        {creditsLabel}
       </Link>
       <Link href="/account" className={linkClass("/account")}>
         Account
@@ -71,15 +75,15 @@ export function NavLinks({ credits, showBatch }: NavLinksProps) {
           >
             <nav className="flex flex-col text-xs uppercase tracking-widest font-medium">
               <Link href="/upload" className="px-6 py-4 border-b border-black/10 hover:bg-black/5">
-                Nieuwe foto
+                {t("new_photo")}
               </Link>
               {showBatch && (
                 <Link href="/upload/batch" className="px-6 py-4 border-b border-black/10 hover:bg-black/5">
-                  Batch
+                  {t("batch")}
                 </Link>
               )}
               <Link href="/upgrade" className="px-6 py-4 border-b border-black/10 hover:bg-black/5">
-                {credits >= 99999 ? "∞" : credits} credits
+                {creditsLabel}
               </Link>
               <Link href="/account" className="px-6 py-4 hover:bg-black/5">
                 Account
