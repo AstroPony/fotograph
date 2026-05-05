@@ -247,14 +247,18 @@ export const imagePipelineTask = task({
       // FLUX Fill Pro slightly shifts its preserved (black-mask) pixels, so
       // compositing the cutout at the original coordinates without clearing
       // first produces two misaligned overlapping copies of the product.
-      const grayRect = await sharp({
+      // The gray patch is alpha-shaped to the product silhouette (reusing
+      // productAlpha from step 4) so transparent regions — arm gaps, lens
+      // cutouts — show the FLUX scene, not a solid gray box.
+      const grayBase = await sharp({
         create: { width: pw!, height: ph!, channels: 3, background: { r: 128, g: 128, b: 128 } },
       }).png().toBuffer();
+      const shapedGray = await sharp(grayBase).joinChannel(productAlpha).png().toBuffer();
 
       const composited = await sharp(inpaintedBuffer)
         .resize(SIZE, SIZE, { fit: "cover" })
         .composite([
-          { input: grayRect, left: pLeft, top: pTop },
+          { input: shapedGray, left: pLeft, top: pTop },
           { input: productToComposite, left: pLeft, top: pTop },
         ])
         .png()
