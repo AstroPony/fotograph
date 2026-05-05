@@ -118,35 +118,49 @@ export const imagePipelineTask = task({
       const pLeft = Math.round((SIZE - pw!) / 2);
       const pTop  = Math.round(SIZE * 0.76 - ph!);
 
-      // 4. Build canvas and mask for FLUX Fill Pro.
+      // 4. Build inpainting canvas and mask for FLUX Fill Pro.
       //
-      // Canvas: plain gray RGB 1024×1024 — no product composited.
-      // Mask:   all WHITE — FLUX generates the full background scene from scratch.
+      // Canvas: gray RGB 1024×1024 with the product composited in position.
+      //   FLUX can see the product's shape/colour and generate a contextually
+      //   consistent scene around it (correct lighting direction, shadow cues).
       //
-      // The clean Photoroom cutout (+ shadow) is composited in step 7 as the sole
-      // copy of the product. Previously we preserved the product area with a black
-      // mask, but FLUX Fill Pro slightly shifts the preserved pixels, causing a
-      // double-product ghost when the cutout is re-composited on top.
+      // Mask: WHITE (255) = generate scene, BLACK (0) = preserve product area.
+      //   The preserved area is blanked before re-compositing in step 6 so FLUX's
+      //   slightly-shifted pixel copy never overlaps the clean cutout.
       logger.info("Building inpainting canvas and mask");
 
       const canvas = await sharp({
         create: { width: SIZE, height: SIZE, channels: 3, background: { r: 128, g: 128, b: 128 } },
       })
+        .composite([{ input: productFit, left: pLeft, top: pTop }])
         .png()
         .toBuffer();
+
+      const productAlpha = await sharp(productFit)
+        .extractChannel("alpha")
+        .threshold(128)
+        .png()
+        .toBuffer();
+
+      const blackBase = await sharp({
+        create: { width: pw!, height: ph!, channels: 3, background: { r: 0, g: 0, b: 0 } },
+      }).png().toBuffer();
+
+      const blackProductRGBA = await sharp(blackBase).joinChannel(productAlpha).png().toBuffer();
 
       const mask = await sharp({
         create: { width: SIZE, height: SIZE, channels: 3, background: { r: 255, g: 255, b: 255 } },
       })
+        .composite([{ input: blackProductRGBA, left: pLeft, top: pTop }])
         .png()
         .toBuffer();
 
       const imageB64 = `data:image/png;base64,${canvas.toString("base64")}`;
       const maskB64  = `data:image/png;base64,${mask.toString("base64")}`;
 
-      // 5. FLUX.1 Fill Pro inpainting — generates the full background scene.
-      //    Fill Pro uses proper CFG guidance (not the distilled architecture of
-      //    Fill Dev that caused mask non-compliance and deformation).
+      // 5. FLUX.1 Fill Pro inpainting — generates contextual scene, lighting, and
+      //    shadows around the product. Fill Pro uses proper CFG guidance (not the
+      //    distilled architecture of Fill Dev that caused deformation).
       logger.info("Generating scene with FLUX Fill Pro inpainting");
 
       const startRes = await fetch(
@@ -162,10 +176,7 @@ export const imagePipelineTask = task({
               image: imageB64,
               mask: maskB64,
               prompt: finalPrompt,
-              // Fill Pro is non-distilled — standard CFG range applies (~3.5–7).
-              // Fill Dev used 30 as a distilled-model convention; using that value here
-              // caused over-conditioning and contributed to double-product artifacts.
-              guidance: 7,
+              guidance: 30,
               steps: 25,
               // safety_tolerance: Fill Pro parameter (0=strict, 2=permissive for products).
               // May not exist on all model versions — benign if ignored by Replicate.
@@ -232,9 +243,20 @@ export const imagePipelineTask = task({
 
       logger.info("Compositing product onto inpainted scene");
 
+      // Blank the product footprint before placing the clean cutout.
+      // FLUX Fill Pro slightly shifts its preserved (black-mask) pixels, so
+      // compositing the cutout at the original coordinates without clearing
+      // first produces two misaligned overlapping copies of the product.
+      const grayRect = await sharp({
+        create: { width: pw!, height: ph!, channels: 3, background: { r: 128, g: 128, b: 128 } },
+      }).png().toBuffer();
+
       const composited = await sharp(inpaintedBuffer)
         .resize(SIZE, SIZE, { fit: "cover" })
-        .composite([{ input: productToComposite, left: pLeft, top: pTop }])
+        .composite([
+          { input: grayRect, left: pLeft, top: pTop },
+          { input: productToComposite, left: pLeft, top: pTop },
+        ])
         .png()
         .toBuffer();
 

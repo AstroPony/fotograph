@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { NavLinks } from "./nav-links";
+import { LangSwitcher } from "./lang-switcher";
 
 const BATCH_TIERS = new Set(["PRO", "BUSINESS"]);
 
@@ -27,7 +28,7 @@ export async function Nav() {
           Fotograph
         </Link>
         <div className="flex items-center gap-4">
-          <span className="text-sm" title="Taal: Nederlands">🇳🇱</span>
+          <LangSwitcher />
           {user && <NavLinks credits={credits} showBatch={showBatch} />}
         </div>
       </div>
