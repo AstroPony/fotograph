@@ -2,8 +2,10 @@
 
 import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { LangSwitcher } from "@/components/lang-switcher";
 
 const supabase = createClient();
 
@@ -79,8 +81,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex flex-col">
       {/* Masthead */}
       <header className="border-b-4 border-black">
-        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center">
-          <span className="font-serif font-black text-lg tracking-tight uppercase">Fotograph</span>
+        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+          <Link href="/" className="font-serif font-black text-lg tracking-tight uppercase">Fotograph</Link>
+          <LangSwitcher />
         </div>
       </header>
 

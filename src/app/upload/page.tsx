@@ -5,13 +5,11 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { usePostHog } from "posthog-js/react";
-import { SCENE_THEMES } from "@/lib/scenes";
+import { SCENE_THEMES, PLATFORMS, PLATFORM_COLORS, type PlatformId } from "@/lib/scenes";
 import { useLanguage } from "@/components/language-provider";
 import type { TranslationKey } from "@/lib/translations";
 
 type SceneTheme = typeof SCENE_THEMES[number];
-// step=3 is only reachable via generate() which always transitions stage away from idle/ready.
-// Invariant: step === 3 → stage ∈ {uploading, removing-bg, generating, done, error}
 type Stage = "idle" | "ready" | "uploading" | "removing-bg" | "generating" | "done" | "error";
 type Step = 1 | 2 | 3;
 
@@ -72,9 +70,54 @@ function StepUpload({ previewFile, onFile, onNext, onReset, dragOver, setDragOve
   );
 }
 
+function StepPlatform({ onSelect, onBack }: {
+  onSelect: (id: PlatformId) => void;
+  onBack: () => void;
+}) {
+  const { t } = useLanguage();
+  return (
+    <div className="flex flex-col flex-1 min-h-0 gap-3">
+      <p className="text-xs uppercase tracking-widest text-black/50">{t("choose_platform")}</p>
+      <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
+        <div className="flex flex-col gap-px bg-black">
+          {PLATFORMS.map((platform) => (
+            <button
+              key={platform.id}
+              onClick={() => onSelect(platform.id)}
+              className="bg-white hover:bg-black hover:text-white group text-left px-4 py-4 flex items-center justify-between transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ background: PLATFORM_COLORS[platform.id] }}
+                />
+                <div>
+                  <p className="text-sm font-medium uppercase tracking-widest leading-none mb-1">
+                    {t(`platform_${platform.id}` as TranslationKey)}
+                  </p>
+                  <p className="text-[10px] uppercase tracking-widest text-black/40 group-hover:text-white/60 transition-colors">
+                    {t(`platform_${platform.id}_desc` as TranslationKey)} · {platform.scenes.length} {t("scenes_label")}
+                  </p>
+                </div>
+              </div>
+              <span className="text-black/30 group-hover:text-white/60 transition-colors">→</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center pt-2 border-t border-black/10">
+        <button onClick={onBack} className="text-xs uppercase tracking-widest text-black/40 hover:text-black transition-colors">
+          {t("back")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const MAX_USER_TEXT = 200;
 
-function StepScene({ selectedTheme, onSelect, onBack, onGenerate, userText, setUserText, tier }: {
+function StepScene({ scenes, selectedTheme, onSelect, onBack, onGenerate, userText, setUserText, tier }: {
+  scenes: SceneTheme[];
   selectedTheme: SceneTheme;
   onSelect: (t: SceneTheme) => void;
   onBack: () => void;
@@ -90,7 +133,7 @@ function StepScene({ selectedTheme, onSelect, onBack, onGenerate, userText, setU
       <p className="text-xs uppercase tracking-widest text-black/50">{t("choose_style")}</p>
       <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
         <div className="grid grid-cols-2 gap-px bg-black">
-          {SCENE_THEMES.map((theme) => {
+          {scenes.map((theme) => {
             const selected = selectedTheme.id === theme.id;
             const sceneKey = `scene_${theme.id}` as TranslationKey;
             return (
@@ -233,6 +276,7 @@ function UploadPageInner() {
   const [stage, setStage] = useState<Stage>("idle");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewFile, setPreviewFile] = useState<string | null>(null);
+  const [selectedPlatformId, setSelectedPlatformId] = useState<PlatformId | null>(null);
   const [selectedTheme, setSelectedTheme] = useState<SceneTheme>(SCENE_THEMES[0]);
   const [userText, setUserText] = useState("");
   const [tier, setTier] = useState("FREE");
@@ -260,7 +304,7 @@ function UploadPageInner() {
   async function generate() {
     if (!selectedFile) return;
     setStep(3);
-    posthog?.capture("generation_started", { scene: selectedTheme.id, has_custom_text: userText.trim().length > 0 });
+    posthog?.capture("generation_started", { scene: selectedTheme.id, platform: selectedPlatformId, has_custom_text: userText.trim().length > 0 });
     try {
       setStage("uploading");
       const res = await fetch("/api/upload", {
@@ -306,7 +350,7 @@ function UploadPageInner() {
         clearInterval(pollRef.current!);
         setResultUrls(data.previewUrls ?? []);
         setStage("done");
-        posthog?.capture("generation_completed", { scene: selectedTheme.id });
+        posthog?.capture("generation_completed", { scene: selectedTheme.id, platform: selectedPlatformId });
       } else if (data.status === "FAILED") {
         clearInterval(pollRef.current!);
         setStage("error");
@@ -317,7 +361,7 @@ function UploadPageInner() {
 
   const stepLabel = (s: Step): string => {
     if (s === 1) return t("step_photo");
-    if (s === 2) return t("step_scene");
+    if (s === 2) return selectedPlatformId ? t("step_scene") : t("step_platform");
     return stage === "done" ? t("step_done") : stage === "error" ? t("step_failed") : t("step_generating");
   };
 
@@ -325,7 +369,15 @@ function UploadPageInner() {
     if (pollRef.current) clearInterval(pollRef.current);
     setStep(1); setStage("idle");
     setSelectedFile(null); setPreviewFile(null); setResultUrls([]);
+    setSelectedPlatformId(null);
   }
+
+  const platformScenes = selectedPlatformId
+    ? SCENE_THEMES.filter((s) => {
+        const p = PLATFORMS.find((pl) => pl.id === selectedPlatformId);
+        return p ? (p.scenes as readonly string[]).includes(s.id) : false;
+      })
+    : [];
 
   return (
     <div className="h-dvh flex flex-col overflow-hidden">
@@ -370,11 +422,23 @@ function UploadPageInner() {
             setDragOver={setDragOver}
           />
         )}
-        {step === 2 && (
+        {step === 2 && !selectedPlatformId && (
+          <StepPlatform
+            onSelect={(pid) => {
+              const platform = PLATFORMS.find((p) => p.id === pid)!;
+              const firstScene = SCENE_THEMES.find((s) => s.id === platform.scenes[0])!;
+              setSelectedPlatformId(pid);
+              setSelectedTheme(firstScene);
+            }}
+            onBack={() => setStep(1)}
+          />
+        )}
+        {step === 2 && selectedPlatformId && (
           <StepScene
+            scenes={platformScenes}
             selectedTheme={selectedTheme}
             onSelect={setSelectedTheme}
-            onBack={() => setStep(1)}
+            onBack={() => setSelectedPlatformId(null)}
             onGenerate={generate}
             userText={userText}
             setUserText={setUserText}

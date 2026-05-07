@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { PRODUCTS, SITE_URL } from "@/lib/constants";
+import { LangSwitcher } from "@/components/lang-switcher";
 
 export const metadata: Metadata = {
   title: "AI productfotografie voor Bol.com & webshops",
@@ -100,13 +101,16 @@ export default async function Home() {
       {/* Top bar */}
       <header className="border-b border-black">
         <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-          <span className="font-serif font-black text-lg tracking-tight uppercase">Fotograph</span>
-          <Link
-            href="/login"
-            className="text-xs uppercase tracking-widest font-medium hover:underline underline-offset-4"
-          >
-            Inloggen
-          </Link>
+          <Link href="/" className="font-serif font-black text-lg tracking-tight uppercase">Fotograph</Link>
+          <div className="flex items-center gap-4">
+            <LangSwitcher />
+            <Link
+              href="/login"
+              className="text-xs uppercase tracking-widest font-medium hover:underline underline-offset-4"
+            >
+              Inloggen
+            </Link>
+          </div>
         </div>
       </header>
 

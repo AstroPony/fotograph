@@ -59,6 +59,24 @@ export const SCENE_THEMES = [
     gradient: ["#28283a", "#0c0c16"] as [string, string],
     prompt: "Close-up straight-on product photography view of a smooth dark anthracite acrylic surface with a faint mirror reflection, flat even surface parallel to the camera, the lower two-thirds of the frame is bare empty surface with nothing on it, dark graduated backdrop from deep charcoal at the bottom to dark blue at the top visible behind, even side light from the upper right, high-end tech product photography.",
   },
+  {
+    id: "bol-white-seamless",
+    label: "Witte achtergrond",
+    gradient: ["#f8f8f8", "#e0e0e0"] as [string, string],
+    prompt: "Straight-on commercial product photography, pure seamless white background, the lower two-thirds of the frame is clean empty white with absolutely nothing on it, bright even studio lighting from overhead softboxes, no props no texture no visible shadows in the background, professional e-commerce product photography.",
+  },
+  {
+    id: "bol-soft-shadow",
+    label: "Zachte schaduw",
+    gradient: ["#f0f0f0", "#d8d8d8"] as [string, string],
+    prompt: "Straight-on commercial product photography, pure white background, a soft natural oval contact shadow placed only directly beneath the product, clean white matte seamless surface, the lower two-thirds of the frame is clean white with nothing else on it, even diffused studio lighting from above, professional e-commerce product photography.",
+  },
+  {
+    id: "bol-light-gray",
+    label: "Licht grijs",
+    gradient: ["#e8e8e8", "#c8c8c8"] as [string, string],
+    prompt: "Straight-on commercial product photography, smooth very light neutral gray gradient background fading from light gray at bottom to near-white at top, clean studio environment, the lower two-thirds of the frame is bare clean surface with nothing on it, soft even professional studio lighting from above, minimal and clean, professional e-commerce product photography.",
+  },
 ] as const;
 
 export type SceneThemeId = typeof SCENE_THEMES[number]["id"];
@@ -74,4 +92,25 @@ export const IMAGE_STATUS_LABELS: Record<string, string> = {
   UPSCALING: "Upscalen",
   DONE: "Klaar",
   FAILED: "Mislukt",
+};
+
+export type PlatformId = "bol" | "shopify" | "woocommerce" | "amazon" | "etsy";
+
+export const PLATFORMS: ReadonlyArray<{
+  id: PlatformId;
+  scenes: ReadonlyArray<SceneThemeId>;
+}> = [
+  { id: "bol",          scenes: ["bol-white-seamless", "bol-soft-shadow", "bol-light-gray"] },
+  { id: "shopify",      scenes: ["editorial-marble", "minimal-studio", "warm-oak-kitchen", "scandi-morning", "botanical-greenhouse", "moody-industrial", "golden-hour-lifestyle", "sunlit-coastal", "winter-cosy", "sleek-tech"] },
+  { id: "woocommerce",  scenes: ["minimal-studio", "editorial-marble", "warm-oak-kitchen", "scandi-morning", "botanical-greenhouse", "sleek-tech"] },
+  { id: "amazon",       scenes: ["bol-white-seamless", "bol-soft-shadow", "bol-light-gray"] },
+  { id: "etsy",         scenes: ["warm-oak-kitchen", "scandi-morning", "botanical-greenhouse", "winter-cosy", "golden-hour-lifestyle", "sunlit-coastal"] },
+] as const;
+
+export const PLATFORM_COLORS: Record<PlatformId, string> = {
+  bol:          "#FF6B2B",
+  shopify:      "#96BF48",
+  woocommerce:  "#7F54B3",
+  amazon:       "#FF9900",
+  etsy:         "#F1641E",
 };

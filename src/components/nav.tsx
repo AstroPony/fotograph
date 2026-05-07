@@ -24,7 +24,7 @@ export async function Nav() {
   return (
     <header className="border-b border-black">
       <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-        <Link href="/dashboard" className="font-serif font-black text-lg tracking-tight uppercase">
+        <Link href={user ? "/dashboard" : "/"} className="font-serif font-black text-lg tracking-tight uppercase">
           Fotograph
         </Link>
         <div className="flex items-center gap-4">
