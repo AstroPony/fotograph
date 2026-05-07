@@ -380,7 +380,7 @@ function UploadPageInner() {
     : [];
 
   return (
-    <div className="h-dvh flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden">
       <main className="flex-1 min-h-0 max-w-xl mx-auto w-full px-6 py-8 flex flex-col overflow-hidden">
 
         {showWelcome && (
