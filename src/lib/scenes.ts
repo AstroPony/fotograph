@@ -63,19 +63,19 @@ export const SCENE_THEMES = [
     id: "bol-white-seamless",
     label: "Witte achtergrond",
     gradient: ["#f8f8f8", "#e0e0e0"] as [string, string],
-    prompt: "Straight-on commercial product photography, pure seamless white background, the lower two-thirds of the frame is clean empty white with absolutely nothing on it, bright even studio lighting from overhead softboxes, no props no texture no visible shadows in the background, professional e-commerce product photography.",
+    prompt: "Single professional e-commerce product photograph. Pure bright white seamless paper sweep background fills the entire frame — the floor, walls, and background are all solid white with zero colour variation. One product photographed straight-on in the lower-centre of the frame. Overhead diffused softbox lighting, perfectly flat and even. Empty white space occupies the lower two-thirds of the frame below the product zone. Clean white studio, nothing else in the frame.",
   },
   {
     id: "bol-soft-shadow",
     label: "Zachte schaduw",
     gradient: ["#f0f0f0", "#d8d8d8"] as [string, string],
-    prompt: "Straight-on commercial product photography, pure white background, a soft natural oval contact shadow placed only directly beneath the product, clean white matte seamless surface, the lower two-thirds of the frame is clean white with nothing else on it, even diffused studio lighting from above, professional e-commerce product photography.",
+    prompt: "Single professional e-commerce product photograph. Pure white seamless background fills the entire frame. One product photographed straight-on in the lower-centre. A very soft, faint oval drop shadow appears only directly beneath the product on the white surface — nothing else. Overhead diffused studio lighting, flat and even. The lower two-thirds of the frame is empty white surface with only the faint shadow. Clean white studio.",
   },
   {
     id: "bol-light-gray",
     label: "Licht grijs",
     gradient: ["#e8e8e8", "#c8c8c8"] as [string, string],
-    prompt: "Straight-on commercial product photography, smooth very light neutral gray gradient background fading from light gray at bottom to near-white at top, clean studio environment, the lower two-thirds of the frame is bare clean surface with nothing on it, soft even professional studio lighting from above, minimal and clean, professional e-commerce product photography.",
+    prompt: "Single professional e-commerce product photograph. Very pale neutral light-gray seamless background — a smooth uniform light-gray tone across the entire frame, slightly lighter at the top and slightly darker at the bottom. One product photographed straight-on in the lower-centre of the frame. The lower two-thirds of the frame is empty pale gray surface. Even overhead studio lighting. Clean minimalist studio background, nothing else in the frame.",
   },
 ] as const;
 

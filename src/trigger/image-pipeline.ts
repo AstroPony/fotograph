@@ -31,8 +31,8 @@ export const imagePipelineTask = task({
 
     const sceneBase = SCENE_PROMPTS[sceneTheme] ?? "";
     const userPrompt = customPrompt ? `${sceneBase} ${customPrompt}`.trim() : sceneBase;
-    // Global safety suffix: prevent text, people, and props that would conflict with product compositing
-    const finalPrompt = `${userPrompt} No text, no writing, no typography, no watermarks, no smoke, no mist, no cables, no cords, no people, no models, no mannequins, no glowing objects, no pedestals, no platforms, no raised bases, no props in the foreground.`;
+    // Global safety suffix — anti-collage clause is critical: FLUX can tile outputs as a "contact sheet"
+    const finalPrompt = `${userPrompt} Single photograph, not a collage, not a grid, not a contact sheet, not multiple panels, not multiple views. No text overlays, no writing, no watermarks, no smoke, no mist, no cables, no cords, no people, no models, no mannequins, no glowing objects, no pedestals, no raised bases, no props in the foreground.`;
 
     if (!BUCKET) throw new Error("CLOUDFLARE_R2_BUCKET_NAME is not set");
     if (!process.env.PHOTOROOM_API_KEY) throw new Error("PHOTOROOM_API_KEY is not set");
@@ -129,8 +129,15 @@ export const imagePipelineTask = task({
       //   FLUX from filling that space with unexpected objects or people.
       logger.info("Building blank canvas and full-generation mask");
 
+      // White canvas for clean-background scenes so the model is biased toward white/light output.
+      // Gray canvas for lifestyle scenes where we want FLUX to fill the scene freely.
+      const isBolScene = sceneTheme.startsWith("bol-");
+      const canvasBg = isBolScene
+        ? { r: 255, g: 255, b: 255 }
+        : { r: 128, g: 128, b: 128 };
+
       const canvas = await sharp({
-        create: { width: SIZE, height: SIZE, channels: 3, background: { r: 128, g: 128, b: 128 } },
+        create: { width: SIZE, height: SIZE, channels: 3, background: canvasBg },
       }).png().toBuffer();
 
       const mask = await sharp({
