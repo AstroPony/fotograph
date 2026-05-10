@@ -3,56 +3,75 @@ import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { r2 } from "@/lib/r2";
 import { prisma } from "@/lib/prisma";
 import { sendUsageAlert } from "@/lib/resend";
-import { SCENE_THEMES } from "@/lib/scenes";
+import { SCENE_MAP } from "@/lib/scenes";
+
+// Map old scene IDs (pre-simplification) to current ones
+const LEGACY_SCENE_IDS: Record<string, string> = {
+  "bol-white-seamless":   "white-seamless",
+  "bol-soft-shadow":      "soft-shadow",
+  "bol-light-gray":       "light-gray",
+  "editorial-marble":     "marble-white",
+  "minimal-studio":       "white-seamless",
+  "warm-oak-kitchen":     "light-wood",
+  "scandi-morning":       "light-wood",
+  "botanical-greenhouse": "light-wood",
+  "moody-industrial":     "dark-concrete",
+  "golden-hour-lifestyle":"light-wood",
+  "sunlit-coastal":       "light-wood",
+  "winter-cosy":          "light-wood",
+  "sleek-tech":           "dark-concrete",
+};
 import sharp from "sharp";
 import { randomUUID } from "crypto";
-
-const SCENE_PROMPTS = Object.fromEntries(SCENE_THEMES.map((t) => [t.id, t.prompt]));
 
 const PHOTOROOM_MONTHLY_LIMIT = 1000;
 const ALERT_THRESHOLDS = [0.70, 0.85, 0.95];
 
 const BUCKET = process.env.CLOUDFLARE_R2_BUCKET_NAME;
-const SIZE = 1024;
-const OUTPUT_SIZE = 1200;   // Bol.com minimum
-const PRODUCT_MAX = Math.round(SIZE * 0.58); // ~594px — generous scene room
+const SIZE   = 1024;
+const OUTPUT_SIZE = 1200; // Bol.com minimum
+
+// Product fits a larger portion of the frame for clean solid backgrounds
+// (product should be prominent on white/gray). Lifestyle scenes use a
+// smaller product so the generated background provides visible context.
+const PRODUCT_MAX_SOLID     = Math.round(SIZE * 0.78); // ~799px
+const PRODUCT_MAX_GENERATED = Math.round(SIZE * 0.58); // ~594px
 
 export const imagePipelineTask = task({
   id: "image-pipeline",
   maxDuration: 300,
 
   run: async (payload: {
-    imageId: string;
-    rawR2Key: string;
-    sceneTheme: string;
+    imageId:      string;
+    rawR2Key:     string;
+    sceneTheme:   string;
     customPrompt: string;
   }) => {
     const { imageId, rawR2Key, sceneTheme, customPrompt } = payload;
 
-    const sceneBase = SCENE_PROMPTS[sceneTheme] ?? "";
-    const userPrompt = customPrompt ? `${sceneBase} ${customPrompt}`.trim() : sceneBase;
-    // Global safety suffix — anti-collage clause is critical: FLUX can tile outputs as a "contact sheet"
-    const finalPrompt = `${userPrompt} Single photograph, not a collage, not a grid, not a contact sheet, not multiple panels, not multiple views. No text overlays, no writing, no watermarks, no smoke, no mist, no cables, no cords, no people, no models, no mannequins, no glowing objects, no pedestals, no raised bases, no props in the foreground.`;
+    const resolvedTheme = LEGACY_SCENE_IDS[sceneTheme] ?? sceneTheme;
+    const scene = SCENE_MAP[resolvedTheme];
+    if (!scene) throw new Error(`Unknown scene theme: ${sceneTheme}`);
 
-    if (!BUCKET) throw new Error("CLOUDFLARE_R2_BUCKET_NAME is not set");
-    if (!process.env.PHOTOROOM_API_KEY) throw new Error("PHOTOROOM_API_KEY is not set");
-    if (!process.env.REPLICATE_API_TOKEN) throw new Error("REPLICATE_API_TOKEN is not set");
+    if (!BUCKET)                              throw new Error("CLOUDFLARE_R2_BUCKET_NAME is not set");
+    if (!process.env.PHOTOROOM_API_KEY)       throw new Error("PHOTOROOM_API_KEY is not set");
+    if (!process.env.REPLICATE_API_TOKEN)     throw new Error("REPLICATE_API_TOKEN is not set");
 
     const TIER_OUTPUT_SIZE: Record<string, number> = {
-      FREE: 512,
-      STARTER: 1024,
-      PRO: OUTPUT_SIZE,
+      FREE:     512,
+      STARTER:  1024,
+      PRO:      OUTPUT_SIZE,
       BUSINESS: OUTPUT_SIZE,
     };
 
     try {
-      // 0. Fetch user tier upfront — needed for output sizing and watermark
+      // 0. Fetch user tier upfront
       const { userId, user } = await prisma.image.findUniqueOrThrow({
-        where: { id: imageId },
+        where:  { id: imageId },
         select: { userId: true, user: { select: { tier: true } } },
       });
       const userTier = user.tier as string;
-      const outSize = TIER_OUTPUT_SIZE[userTier] ?? OUTPUT_SIZE;
+      const outSize  = TIER_OUTPUT_SIZE[userTier] ?? OUTPUT_SIZE;
 
       // 1. Download raw image from R2
       logger.info("Downloading raw image", { rawR2Key });
@@ -68,27 +87,27 @@ export const imagePipelineTask = task({
       formData.append("image_file", new Blob([rawBuffer], { type: "image/png" }), "image.png");
 
       const photoroomRes = await fetch("https://sdk.photoroom.com/v1/segment", {
-        method: "POST",
+        method:  "POST",
         headers: { "x-api-key": process.env.PHOTOROOM_API_KEY! },
-        body: formData,
+        body:    formData,
       });
       if (!photoroomRes.ok) {
         throw new Error(`Photoroom error ${photoroomRes.status}: ${await photoroomRes.text()}`);
       }
 
       const bgRemovedBuffer = Buffer.from(await photoroomRes.arrayBuffer());
-      const bgRemovedKey = `bg-removed/${imageId}/${randomUUID()}.png`;
+      const bgRemovedKey    = `bg-removed/${imageId}/${randomUUID()}.png`;
 
       await r2.send(new PutObjectCommand({
-        Bucket: BUCKET,
-        Key: bgRemovedKey,
-        Body: bgRemovedBuffer,
+        Bucket:      BUCKET,
+        Key:         bgRemovedKey,
+        Body:        bgRemovedBuffer,
         ContentType: "image/png",
       }));
 
       await prisma.image.update({
         where: { id: imageId },
-        data: { bgRemovedR2Key: bgRemovedKey, status: "GENERATING" },
+        data:  { bgRemovedR2Key: bgRemovedKey, status: "GENERATING" },
       });
 
       // Monthly Photoroom usage alert
@@ -107,149 +126,134 @@ export const imagePipelineTask = task({
         logger.info("Usage alert sent", { usedThisMonth, threshold: crossed });
       }
 
-      // 3. Resize product and compute placement.
-      // Product bottom anchored at 76% canvas height so it sits on the scene surface.
+      // 3. Resize product cutout and compute placement.
+      // Solid backgrounds: product fills most of the frame (prominent, Bol.com style).
+      // Generated backgrounds: smaller product leaves visible scene context.
+      // Vertical: centred for solid, bottom-anchored at 76% for lifestyle.
+      const productMax = scene.generated ? PRODUCT_MAX_GENERATED : PRODUCT_MAX_SOLID;
+
       const productFit = await sharp(bgRemovedBuffer)
-        .resize(PRODUCT_MAX, PRODUCT_MAX, { fit: "inside" })
+        .resize(productMax, productMax, { fit: "inside" })
         .ensureAlpha()
         .png()
         .toBuffer();
       const { width: pw, height: ph } = await sharp(productFit).metadata();
       const pLeft = Math.round((SIZE - pw!) / 2);
-      const pTop  = Math.round(SIZE * 0.76 - ph!);
+      const pTop  = scene.generated
+        ? Math.round(SIZE * 0.76 - ph!)  // sits on scene surface
+        : Math.round((SIZE - ph!) / 2);  // centred on clean background
 
-      // 4. Build blank canvas and all-white mask for FLUX Fill Pro.
-      //
-      // Canvas: uniform gray 1024×1024 — no product. FLUX generates the complete
-      //   scene from scratch guided entirely by the text prompt.
-      //
-      // Mask: all-white — FLUX regenerates every pixel. The product is composited
-      //   onto the finished scene in step 6, so there is nothing to preserve here.
-      //   Scene prompts explicitly describe an empty center foreground, preventing
-      //   FLUX from filling that space with unexpected objects or people.
-      logger.info("Building blank canvas and full-generation mask");
+      // 4. Generate background.
+      // Solid scenes: Sharp creates the colour canvas instantly — no AI credits used.
+      // Generated scenes: FLUX Schnell (text-to-image) — fast (~3–5 s) and cheap.
+      logger.info("Generating background", { sceneTheme, generated: scene.generated });
 
-      // White canvas for clean-background scenes so the model is biased toward white/light output.
-      // Gray canvas for lifestyle scenes where we want FLUX to fill the scene freely.
-      const isBolScene = sceneTheme.startsWith("bol-");
-      const canvasBg = isBolScene
-        ? { r: 255, g: 255, b: 255 }
-        : { r: 128, g: 128, b: 128 };
+      let bgBuffer: Buffer;
 
-      const canvas = await sharp({
-        create: { width: SIZE, height: SIZE, channels: 3, background: canvasBg },
-      }).png().toBuffer();
+      if (!scene.generated) {
+        bgBuffer = await sharp({
+          create: { width: SIZE, height: SIZE, channels: 3, background: scene.bgColor },
+        }).png().toBuffer();
+      } else {
+        const basePrompt = scene.prompt;
+        const finalPrompt = customPrompt
+          ? `${basePrompt}, ${customPrompt}. No text, no people, no props.`
+          : `${basePrompt}. No text, no people, no props.`;
 
-      const mask = await sharp({
-        create: { width: SIZE, height: SIZE, channels: 3, background: { r: 255, g: 255, b: 255 } },
-      }).png().toBuffer();
-
-      const imageB64 = `data:image/png;base64,${canvas.toString("base64")}`;
-      const maskB64  = `data:image/png;base64,${mask.toString("base64")}`;
-
-      // 5. FLUX.1 Fill Pro inpainting — generates the complete scene background.
-      // Retries on 429 rate-limit responses, respecting retry_after from Replicate.
-      logger.info("Generating scene with FLUX Fill Pro inpainting");
-
-      const replicateBody = JSON.stringify({
-        input: {
-          image: imageB64,
-          mask: maskB64,
-          prompt: finalPrompt,
-          guidance: 30,
-          steps: 25,
-          safety_tolerance: 2,
-          output_format: "png",
-        },
-      });
-
-      let startRes!: Response;
-      for (let attempt = 0; attempt <= 8; attempt++) {
-        startRes = await fetch(
-          "https://api.replicate.com/v1/models/black-forest-labs/flux-fill-pro/predictions",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}`,
-              "Content-Type": "application/json",
-            },
-            body: replicateBody,
-          }
-        );
-        if (startRes.status !== 429) break;
-        const rateLimitBody = await startRes.json().catch(() => ({}));
-        const waitSecs = (rateLimitBody.retry_after as number | undefined) ?? 10;
-        logger.warn("Replicate rate limited, waiting to retry", { waitSecs, attempt: attempt + 1 });
-        await new Promise((resolve) => setTimeout(resolve, waitSecs * 1000));
-      }
-
-      if (!startRes.ok) {
-        throw new Error(`Replicate start error: ${await startRes.text()}`);
-      }
-
-      let prediction = await startRes.json();
-
-      // Poll until done — Fill Pro runs ~25-45s at 25 steps
-      const maxPolls = 90;
-      let polls = 0;
-      while (prediction.status !== "succeeded" && prediction.status !== "failed") {
-        if (polls++ >= maxPolls) throw new Error("Replicate prediction timed out after ~3.5 minutes");
-        await new Promise((resolve) => setTimeout(resolve, 2500));
-        const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
-          headers: { Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}` },
+        const schnellBody = JSON.stringify({
+          input: {
+            prompt:               finalPrompt,
+            width:                SIZE,
+            height:               SIZE,
+            num_outputs:          1,
+            num_inference_steps:  4,
+            output_format:        "png",
+          },
         });
-        if (!pollRes.ok) throw new Error(`Replicate poll error ${pollRes.status}`);
-        prediction = await pollRes.json();
-        logger.info("Prediction status", { status: prediction.status, polls });
+
+        let startRes!: Response;
+        for (let attempt = 0; attempt <= 8; attempt++) {
+          startRes = await fetch(
+            "https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions",
+            {
+              method:  "POST",
+              headers: {
+                Authorization:  `Bearer ${process.env.REPLICATE_API_TOKEN}`,
+                "Content-Type": "application/json",
+              },
+              body: schnellBody,
+            }
+          );
+          if (startRes.status !== 429) break;
+          const rl = await startRes.json().catch(() => ({}));
+          const waitSecs = (rl.retry_after as number | undefined) ?? 10;
+          logger.warn("Replicate rate limited, retrying", { waitSecs, attempt: attempt + 1 });
+          await new Promise((r) => setTimeout(r, waitSecs * 1000));
+        }
+
+        if (!startRes.ok) {
+          throw new Error(`Replicate start error: ${await startRes.text()}`);
+        }
+
+        let prediction = await startRes.json();
+
+        // Schnell is fast (~3–5 s); poll every 1 s with a 60 s timeout
+        const maxPolls = 60;
+        let polls = 0;
+        while (prediction.status !== "succeeded" && prediction.status !== "failed") {
+          if (polls++ >= maxPolls) throw new Error("Replicate prediction timed out after 60 s");
+          await new Promise((r) => setTimeout(r, 1000));
+          const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+            headers: { Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}` },
+          });
+          if (!pollRes.ok) throw new Error(`Replicate poll error ${pollRes.status}`);
+          prediction = await pollRes.json();
+          logger.info("Prediction status", { status: prediction.status, polls });
+        }
+
+        if (prediction.status === "failed") {
+          throw new Error(`Replicate prediction failed: ${prediction.error}`);
+        }
+
+        const rawOutput = prediction.output;
+        const outputUrl = Array.isArray(rawOutput) ? rawOutput[0] : rawOutput;
+        if (typeof outputUrl !== "string") throw new Error("Replicate returned no output URL");
+        const bgRes = await fetch(outputUrl);
+        if (!bgRes.ok) throw new Error(`Failed to download Replicate output: ${bgRes.status}`);
+        bgBuffer = Buffer.from(await bgRes.arrayBuffer());
       }
 
-      if (prediction.status === "failed") {
-        throw new Error(`Replicate prediction failed: ${prediction.error}`);
-      }
-
-      const rawOutput = prediction.output;
-      const outputUrl = Array.isArray(rawOutput) ? rawOutput[0] : rawOutput;
-      if (typeof outputUrl !== "string") throw new Error("Replicate returned no output URL");
-      const generatedRes = await fetch(outputUrl);
-      if (!generatedRes.ok) throw new Error(`Failed to download Replicate output: ${generatedRes.status}`);
-      const inpaintedBuffer = Buffer.from(await generatedRes.arrayBuffer());
-
-      // 6. Add AI contact shadow to the clean cutout via Photoroom Shadow API,
-      //    then composite onto the FLUX scene.
-      //    Shadow is requested on the transparent cutout so it alpha-blends naturally
-      //    onto the FLUX-generated surface. Gracefully falls back to no shadow on error.
+      // 5. Add contact shadow to the clean cutout via Photoroom Shadow API,
+      //    then composite product onto the background.
+      //    Gracefully falls back to no shadow on error.
       logger.info("Adding contact shadow via Photoroom");
 
       let productToComposite = productFit;
-      const shadowFormData = new FormData();
-      shadowFormData.append("imageFile", new Blob([new Uint8Array(productFit)], { type: "image/png" }), "product.png");
-      shadowFormData.append("shadow.mode", "ai.soft");
+      const shadowForm = new FormData();
+      shadowForm.append("imageFile", new Blob([new Uint8Array(productFit)], { type: "image/png" }), "product.png");
+      shadowForm.append("shadow.mode", "ai.soft");
 
       const shadowRes = await fetch("https://image-api.photoroom.com/v2/edit", {
-        method: "POST",
+        method:  "POST",
         headers: { "x-api-key": process.env.PHOTOROOM_API_KEY! },
-        body: shadowFormData,
+        body:    shadowForm,
       });
 
       if (shadowRes.ok) {
         productToComposite = Buffer.from(await shadowRes.arrayBuffer());
         logger.info("Shadow applied");
       } else {
-        logger.warn("Photoroom shadow skipped", { status: shadowRes.status, body: await shadowRes.text() });
+        logger.warn("Photoroom shadow skipped", { status: shadowRes.status });
       }
 
-      // Composite the clean product cutout onto the FLUX-generated scene.
-      // No blanking step needed — FLUX never saw the product, so there is no
-      // shifted copy to remove.
-      logger.info("Compositing product onto inpainted scene");
-
-      const composited = await sharp(inpaintedBuffer)
+      logger.info("Compositing product onto background");
+      const composited = await sharp(bgBuffer)
         .resize(SIZE, SIZE, { fit: "cover" })
         .composite([{ input: productToComposite, left: pLeft, top: pTop }])
         .png()
         .toBuffer();
 
-      // 7. Tier-aware output sizing + free-tier watermark + EU AI Act EXIF
+      // 6. Tier-aware output sizing + free-tier watermark + EU AI Act EXIF
       logger.info("Resizing output", { userTier, outSize });
 
       let outputBuffer = await sharp(composited)
@@ -278,8 +282,8 @@ export const imagePipelineTask = task({
           exif: {
             IFD0: {
               ImageDescription: "AI-generated product photo by Fotograph",
-              Software: "Fotograph — FLUX.1 Fill Pro via Replicate",
-              Artist: "Fotograph AI",
+              Software:         "Fotograph — FLUX Schnell via Replicate",
+              Artist:           "Fotograph AI",
             },
           },
         })
@@ -289,21 +293,21 @@ export const imagePipelineTask = task({
       const previewKey = `previews/${imageId}/${randomUUID()}.jpg`;
 
       await r2.send(new PutObjectCommand({
-        Bucket: BUCKET,
-        Key: previewKey,
-        Body: withExif,
+        Bucket:      BUCKET,
+        Key:         previewKey,
+        Body:        withExif,
         ContentType: "image/jpeg",
       }));
 
-      // 8. Mark done, deduct one credit
+      // 7. Mark done, deduct one credit
       await prisma.$transaction([
         prisma.image.update({
           where: { id: imageId },
-          data: { status: "DONE", previewR2Keys: [previewKey] },
+          data:  { status: "DONE", previewR2Keys: [previewKey] },
         }),
         prisma.user.update({
           where: { id: userId },
-          data: { creditsLeft: { decrement: 1 } },
+          data:  { creditsLeft: { decrement: 1 } },
         }),
       ]);
 

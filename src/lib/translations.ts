@@ -189,19 +189,12 @@ const nl = {
   platform_etsy: "Etsy",
   platform_etsy_desc: "Warm & artisanaal",
   // Scene labels
-  "scene_editorial-marble": "Marmeren plint",
-  "scene_minimal-studio": "Witte studio",
-  "scene_warm-oak-kitchen": "Eiken keuken",
-  "scene_scandi-morning": "Scandinavisch interieur",
-  "scene_botanical-greenhouse": "Botanische kas",
-  "scene_moody-industrial": "Industrieel donker",
-  "scene_golden-hour-lifestyle": "Gouden uur terras",
-  "scene_sunlit-coastal": "Kust & zon",
-  "scene_winter-cosy": "Winterse sfeer",
-  "scene_sleek-tech": "Tech & elektronica",
-  "scene_bol-white-seamless": "Witte achtergrond",
-  "scene_bol-soft-shadow": "Zachte schaduw",
-  "scene_bol-light-gray": "Licht grijs",
+  "scene_white-seamless": "Witte achtergrond",
+  "scene_soft-shadow": "Zachte schaduw",
+  "scene_light-gray": "Licht grijs",
+  "scene_marble-white": "Wit marmer",
+  "scene_light-wood": "Licht hout",
+  "scene_dark-concrete": "Donker beton",
 } as const;
 
 const en: Record<keyof typeof nl, string> = {
@@ -393,19 +386,12 @@ const en: Record<keyof typeof nl, string> = {
   platform_etsy: "Etsy",
   platform_etsy_desc: "Warm & artisanal",
   // Scene labels
-  "scene_editorial-marble": "Marble plinth",
-  "scene_minimal-studio": "White studio",
-  "scene_warm-oak-kitchen": "Oak kitchen",
-  "scene_scandi-morning": "Scandinavian interior",
-  "scene_botanical-greenhouse": "Botanical greenhouse",
-  "scene_moody-industrial": "Moody industrial",
-  "scene_golden-hour-lifestyle": "Golden hour terrace",
-  "scene_sunlit-coastal": "Coastal & sun",
-  "scene_winter-cosy": "Winter cosy",
-  "scene_sleek-tech": "Tech & electronics",
-  "scene_bol-white-seamless": "White background",
-  "scene_bol-soft-shadow": "Soft shadow",
-  "scene_bol-light-gray": "Light gray",
+  "scene_white-seamless": "White background",
+  "scene_soft-shadow": "Soft shadow",
+  "scene_light-gray": "Light gray",
+  "scene_marble-white": "White marble",
+  "scene_light-wood": "Light wood",
+  "scene_dark-concrete": "Dark concrete",
 };
 
 export const translations: Record<Lang, Record<keyof typeof nl, string>> = { nl, en };
