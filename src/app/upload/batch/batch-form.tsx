@@ -22,6 +22,7 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
   const { t } = useLanguage();
   const [selectedPlatformId, setSelectedPlatformId] = useState<PlatformId | null>(null);
   const [selectedTheme, setSelectedTheme] = useState<SceneTheme>(SCENE_THEMES[0]);
+  const [sceneConfirmed, setSceneConfirmed] = useState(false);
   const [files, setFiles] = useState<BatchFile[]>([]);
   const [running, setRunning] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -49,6 +50,7 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
     const firstScene = SCENE_THEMES.find((s) => s.id === platform.scenes[0])!;
     setSelectedPlatformId(pid);
     setSelectedTheme(firstScene);
+    setSceneConfirmed(false);
   }
 
   const addFiles = useCallback((incoming: FileList | File[]) => {
@@ -146,7 +148,7 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
   }
 
   async function startBatch() {
-    if (files.length === 0 || !selectedPlatformId) return;
+    if (files.length === 0 || !sceneConfirmed) return;
     setRunning(true);
     for (const bf of files.filter((f) => f.status === "queued")) {
       try {
@@ -160,11 +162,11 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
     toast.success(t("batch_sent"));
   }
 
-  const queued   = files.filter((f) => f.status === "queued").length;
-  const done     = files.filter((f) => f.status === "done").length;
-  const errored  = files.filter((f) => f.status === "error").length;
+  const queued  = files.filter((f) => f.status === "queued").length;
+  const done    = files.filter((f) => f.status === "done").length;
+  const errored = files.filter((f) => f.status === "error").length;
 
-  // ── Platform picker ─────────────────────────────────────────────────────────
+  // ── Step 1: Platform picker ──────────────────────────────────────────────────
   if (!selectedPlatformId) {
     return (
       <div className="flex flex-col gap-4">
@@ -198,34 +200,31 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
     );
   }
 
-  // ── Main batch form (platform selected) ─────────────────────────────────────
-  return (
-    <div className="flex flex-col gap-8">
-
-      {/* Scene selector */}
-      <div>
-        <div className="flex items-center justify-between border-b border-black pb-1 mb-4">
+  // ── Step 2: Scene selection ──────────────────────────────────────────────────
+  if (!sceneConfirmed) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between border-b border-black pb-1">
           <h2 className="text-xs uppercase tracking-widest font-medium">
             {t("scene_for_all")}
           </h2>
           <button
-            onClick={() => !running && setSelectedPlatformId(null)}
-            disabled={running}
-            className="text-[10px] uppercase tracking-widest text-black/40 hover:text-black transition-colors disabled:opacity-30"
+            onClick={() => setSelectedPlatformId(null)}
+            className="text-[10px] uppercase tracking-widest text-black/40 hover:text-black transition-colors"
           >
             {t(`platform_${selectedPlatformId}` as TranslationKey)}
             <span className="ml-1 text-black/20">↩</span>
           </button>
         </div>
+
         <div className="grid grid-cols-2 gap-px bg-black">
           {platformScenes.map((theme) => {
             const selected = selectedTheme.id === theme.id;
             return (
               <button
                 key={theme.id}
-                onClick={() => !running && setSelectedTheme(theme)}
-                disabled={running}
-                className={`relative text-left transition-colors disabled:opacity-40 ${
+                onClick={() => setSelectedTheme(theme)}
+                className={`relative text-left transition-colors ${
                   selected ? "bg-black text-white" : "bg-white hover:bg-black/5"
                 }`}
               >
@@ -244,6 +243,39 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
             );
           })}
         </div>
+
+        <button
+          onClick={() => setSceneConfirmed(true)}
+          className="w-full bg-black text-white px-6 py-4 text-xs uppercase tracking-widest font-medium hover:bg-black/80 transition-colors"
+        >
+          {t("select_scene")}
+        </button>
+      </div>
+    );
+  }
+
+  // ── Step 3: Photos + start ───────────────────────────────────────────────────
+  return (
+    <div className="flex flex-col gap-8">
+
+      {/* Confirmed scene summary */}
+      <div className="flex items-center justify-between border-b border-black pb-2">
+        <div className="flex items-center gap-2">
+          <div
+            className="w-6 h-6 shrink-0"
+            style={{ background: `linear-gradient(145deg, ${selectedTheme.gradient[0]}, ${selectedTheme.gradient[1]})` }}
+          />
+          <p className="text-xs uppercase tracking-widest font-medium">
+            {t(`scene_${selectedTheme.id}` as TranslationKey)}
+          </p>
+        </div>
+        <button
+          onClick={() => !running && setSceneConfirmed(false)}
+          disabled={running}
+          className="text-[10px] uppercase tracking-widest text-black/40 hover:text-black transition-colors disabled:opacity-30"
+        >
+          {t("back")}
+        </button>
       </div>
 
       {/* Drop zone */}
@@ -271,7 +303,7 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
         </label>
       </div>
 
-      {/* File grid */}
+      {/* File grid + start */}
       {files.length > 0 && (
         <div>
           <div className="grid grid-cols-3 md:grid-cols-5 gap-px bg-black mb-4">
@@ -302,7 +334,6 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
             ))}
           </div>
 
-          {/* Summary + action */}
           <div className="flex items-center justify-between border border-black px-4 py-3">
             <p className="text-xs uppercase tracking-widest font-medium text-black/60">
               {queued} {t("status_queued").toLowerCase()} · {done} {t("status_done").toLowerCase()}

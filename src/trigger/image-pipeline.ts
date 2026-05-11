@@ -3,24 +3,7 @@ import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { r2 } from "@/lib/r2";
 import { prisma } from "@/lib/prisma";
 import { sendUsageAlert } from "@/lib/resend";
-import { SCENE_MAP } from "@/lib/scenes";
-
-// Map old scene IDs (pre-simplification) to current ones
-const LEGACY_SCENE_IDS: Record<string, string> = {
-  "bol-white-seamless":   "white-seamless",
-  "bol-soft-shadow":      "soft-shadow",
-  "bol-light-gray":       "light-gray",
-  "editorial-marble":     "marble-white",
-  "minimal-studio":       "white-seamless",
-  "warm-oak-kitchen":     "light-wood",
-  "scandi-morning":       "light-wood",
-  "botanical-greenhouse": "light-wood",
-  "moody-industrial":     "dark-concrete",
-  "golden-hour-lifestyle":"light-wood",
-  "sunlit-coastal":       "light-wood",
-  "winter-cosy":          "light-wood",
-  "sleek-tech":           "dark-concrete",
-};
+import { SCENE_MAP, LEGACY_SCENE_IDS } from "@/lib/scenes";
 import sharp from "sharp";
 import { randomUUID } from "crypto";
 

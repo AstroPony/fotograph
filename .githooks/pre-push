@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Fotograph pre-push gate: type-check → tests → rating
+set -euo pipefail
+
+YELLOW='\033[0;33m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+echo ""
+echo -e "${BOLD}── Pre-push checks ─────────────────────────────────${NC}"
+
+# 1. TypeScript
+echo -e "${YELLOW}▶  TypeScript...${NC}"
+npx --yes tsc --noEmit
+echo -e "${GREEN}✓  TypeScript clean${NC}"
+
+# 2. Tests
+echo -e "${YELLOW}▶  Tests...${NC}"
+npm test
+echo -e "${GREEN}✓  All tests passed${NC}"
+
+# 3. Rating gate
+echo ""
+echo -e "${BOLD}── Rating check ─────────────────────────────────────${NC}"
+echo "   Run the /programming-excellence skill in Claude,"
+echo "   then enter the score below."
+echo ""
+echo -n "   Score (0–10, must be ≥ 9 to push): "
+
+# Read from /dev/tty so it works even when stdin is the git pipe
+read -r SCORE </dev/tty
+
+# Validate it looks like a number
+if ! [[ "$SCORE" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+  echo -e "${RED}✗  Invalid score \"$SCORE\". Push blocked.${NC}"
+  exit 1
+fi
+
+# Float comparison via awk
+if awk "BEGIN { exit !($SCORE >= 9) }"; then
+  echo -e "${GREEN}✓  Rating ${SCORE}/10 — approved${NC}"
+else
+  echo -e "${RED}✗  Rating ${SCORE}/10 is below 9. Push blocked.${NC}"
+  exit 1
+fi
+
+echo ""
+echo -e "${GREEN}${BOLD}── All checks passed — pushing ─────────────────────${NC}"
+echo ""

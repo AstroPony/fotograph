@@ -6,11 +6,10 @@ describe("SCENE_THEMES", () => {
     expect(SCENE_THEMES.length).toBeGreaterThan(0);
   });
 
-  it("every scene has all required fields", () => {
+  it("every scene has id, label, and gradient", () => {
     for (const theme of SCENE_THEMES) {
       expect(theme.id, `scene missing id`).toBeTruthy();
       expect(theme.label, `${theme.id} missing label`).toBeTruthy();
-      expect(theme.prompt, `${theme.id} missing prompt`).toBeTruthy();
       expect(Array.isArray(theme.gradient), `${theme.id} gradient not array`).toBe(true);
     }
   });
@@ -32,14 +31,15 @@ describe("SCENE_THEMES", () => {
     }
   });
 
-  it("no prompt is dangerously short (guards against accidental empty strings)", () => {
-    for (const theme of SCENE_THEMES) {
-      expect(theme.prompt.length, `${theme.id} prompt too short`).toBeGreaterThan(20);
+  it("solid scenes (generated: false) have empty prompt", () => {
+    for (const theme of SCENE_THEMES.filter((t) => !t.generated)) {
+      expect(theme.prompt, `${theme.id} solid scene should have empty prompt`).toBe("");
     }
   });
 
-  it("no prompt exceeds the API character limit", () => {
-    for (const theme of SCENE_THEMES) {
+  it("generated scenes have a meaningful prompt within API limits", () => {
+    for (const theme of SCENE_THEMES.filter((t) => t.generated)) {
+      expect(theme.prompt.length, `${theme.id} prompt too short`).toBeGreaterThan(20);
       // Leave room for user's custom text (200 chars) on top of the scene prompt
       expect(theme.prompt.length, `${theme.id} prompt too long`).toBeLessThan(800);
     }

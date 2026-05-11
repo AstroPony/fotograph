@@ -62,6 +62,24 @@ export const SCENE_MAP: Record<string, SceneTheme> = Object.fromEntries(
   SCENE_THEMES.map((t) => [t.id, t])
 );
 
+// Maps pre-simplification scene IDs to current ones.
+// Needed so jobs queued before the scene rename continue to resolve correctly.
+export const LEGACY_SCENE_IDS: Record<string, string> = {
+  "bol-white-seamless":    "white-seamless",
+  "bol-soft-shadow":       "soft-shadow",
+  "bol-light-gray":        "light-gray",
+  "editorial-marble":      "marble-white",
+  "minimal-studio":        "white-seamless",
+  "warm-oak-kitchen":      "light-wood",
+  "scandi-morning":        "light-wood",
+  "botanical-greenhouse":  "light-wood",
+  "moody-industrial":      "dark-concrete",
+  "golden-hour-lifestyle": "light-wood",
+  "sunlit-coastal":        "light-wood",
+  "winter-cosy":           "light-wood",
+  "sleek-tech":            "dark-concrete",
+};
+
 export const SCENE_LABELS: Record<string, string> = Object.fromEntries(
   SCENE_THEMES.map((t) => [t.id, t.label])
 );
