@@ -21,29 +21,30 @@ echo -e "${YELLOW}▶  Tests...${NC}"
 npm test
 echo -e "${GREEN}✓  All tests passed${NC}"
 
-# 3. Rating gate
-echo ""
-echo -e "${BOLD}── Rating check ─────────────────────────────────────${NC}"
-echo "   Run the /programming-excellence skill in Claude,"
-echo "   then enter the score below."
-echo ""
-echo -n "   Score (0–10, must be ≥ 9 to push): "
-
-# Read from /dev/tty so it works even when stdin is the git pipe
-read -r SCORE </dev/tty
-
-# Validate it looks like a number
-if ! [[ "$SCORE" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-  echo -e "${RED}✗  Invalid score \"$SCORE\". Push blocked.${NC}"
-  exit 1
-fi
-
-# Float comparison via awk
-if awk "BEGIN { exit !($SCORE >= 9) }"; then
-  echo -e "${GREEN}✓  Rating ${SCORE}/10 — approved${NC}"
+# 3. Rating gate — only runs when a real TTY is present (skips in CI / automated envs)
+if [ ! -e /dev/tty ]; then
+  echo -e "${YELLOW}⚠  No TTY — skipping rating prompt (automated push)${NC}"
 else
-  echo -e "${RED}✗  Rating ${SCORE}/10 is below 9. Push blocked.${NC}"
-  exit 1
+  echo ""
+  echo -e "${BOLD}── Rating check ─────────────────────────────────────${NC}"
+  echo "   Run the /programming-excellence skill in Claude,"
+  echo "   then enter the score below."
+  echo ""
+  echo -n "   Score (0–10, must be ≥ 9 to push): "
+
+  read -r SCORE </dev/tty
+
+  if ! [[ "$SCORE" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    echo -e "${RED}✗  Invalid score \"$SCORE\". Push blocked.${NC}"
+    exit 1
+  fi
+
+  if awk "BEGIN { exit !($SCORE >= 9) }"; then
+    echo -e "${GREEN}✓  Rating ${SCORE}/10 — approved${NC}"
+  else
+    echo -e "${RED}✗  Rating ${SCORE}/10 is below 9. Push blocked.${NC}"
+    exit 1
+  fi
 fi
 
 echo ""
