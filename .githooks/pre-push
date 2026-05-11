@@ -22,7 +22,8 @@ npm test
 echo -e "${GREEN}✓  All tests passed${NC}"
 
 # 3. Rating gate — only runs when a real TTY is present (skips in CI / automated envs)
-if [ ! -e /dev/tty ]; then
+# Probe by actually opening the device; file existence alone is not sufficient on all systems
+if ! { true </dev/tty; } 2>/dev/null; then
   echo -e "${YELLOW}⚠  No TTY — skipping rating prompt (automated push)${NC}"
 else
   echo ""
