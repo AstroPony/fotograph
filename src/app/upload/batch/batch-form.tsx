@@ -96,13 +96,13 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
     setFiles((prev) => prev.map((f) => f.id === id ? { ...f, status, ...(imageId ? { imageId } : {}) } : f));
   }
 
-  async function processFile(bf: BatchFile): Promise<void> {
+  async function processFile(bf: BatchFile, batchGroupId: string): Promise<void> {
     updateStatus(bf.id, "uploading");
 
     const uploadRes = await fetch("/api/upload", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contentType: bf.file.type, filename: bf.file.name, fileSize: bf.file.size }),
+      body: JSON.stringify({ contentType: bf.file.type, filename: bf.file.name, fileSize: bf.file.size, batchId: batchGroupId }),
     });
     if (!uploadRes.ok) {
       const err = await uploadRes.json().catch(() => ({}));
@@ -150,9 +150,10 @@ export function BatchForm({ batchLimit, creditsLeft }: { batchLimit: number; cre
   async function startBatch() {
     if (files.length === 0 || !sceneConfirmed) return;
     setRunning(true);
+    const batchGroupId = crypto.randomUUID();
     for (const bf of files.filter((f) => f.status === "queued")) {
       try {
-        await processFile(bf);
+        await processFile(bf, batchGroupId);
       } catch (err) {
         updateStatus(bf.id, "error");
         toast.error(`${bf.file.name}: ${err instanceof Error ? err.message : t("status_error")}`);

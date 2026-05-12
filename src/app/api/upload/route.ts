@@ -15,13 +15,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { contentType?: string; filename?: string; fileSize?: number };
+  let body: { contentType?: string; filename?: string; fileSize?: number; batchId?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const { contentType, filename, fileSize } = body;
+  const { contentType, filename, fileSize, batchId } = body;
 
   if (!contentType || !filename || typeof fileSize !== "number") {
     return NextResponse.json({ error: "contentType, filename en fileSize zijn verplicht" }, { status: 400 });
@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
       userId: dbUser.id,
       rawR2Key: key,
       status: "PENDING",
+      batchId: batchId ?? null,
     },
   });
 

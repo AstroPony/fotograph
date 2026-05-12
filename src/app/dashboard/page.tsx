@@ -27,7 +27,7 @@ export default async function DashboardPage() {
     where: { user: { supabaseId: user.id } },
     orderBy: { createdAt: "desc" },
     take: 50,
-    select: { id: true, status: true, sceneTheme: true, previewR2Keys: true, createdAt: true },
+    select: { id: true, status: true, sceneTheme: true, previewR2Keys: true, createdAt: true, batchId: true },
   });
 
   const imagesWithUrls = await Promise.all(

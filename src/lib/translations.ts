@@ -77,6 +77,10 @@ const nl = {
   dashboard_no_photos_body: "Je hebt nog geen productfoto's gegenereerd. Upload een foto om te beginnen.",
   dashboard_first_photo: "Eerste foto maken",
   dashboard_vol: "Vol. 1 — Nr. 1",
+  dashboard_sort_newest: "Nieuwste eerst",
+  dashboard_sort_oldest: "Oudste eerst",
+  dashboard_filter_all: "Alle",
+  dashboard_download_zip: "Download ZIP",
   // Image statuses
   img_status_PENDING: "In wachtrij",
   img_status_REMOVING_BG: "Achtergrond",
@@ -274,6 +278,10 @@ const en: Record<keyof typeof nl, string> = {
   dashboard_no_photos_body: "You haven't generated any product photos yet. Upload a photo to get started.",
   dashboard_first_photo: "Create first photo",
   dashboard_vol: "Vol. 1 — No. 1",
+  dashboard_sort_newest: "Newest first",
+  dashboard_sort_oldest: "Oldest first",
+  dashboard_filter_all: "All",
+  dashboard_download_zip: "Download ZIP",
   // Image statuses
   img_status_PENDING: "In queue",
   img_status_REMOVING_BG: "Removing BG",

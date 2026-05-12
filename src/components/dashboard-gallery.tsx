@@ -6,6 +6,7 @@ import { SCENE_LABELS } from "@/lib/scenes";
 type GalleryImage = {
   id: string;
   sceneTheme: string | null;
+  batchId: string | null;
   createdAt: Date;
   previewUrls: string[];
 };
@@ -62,7 +63,6 @@ export function DashboardGallery({ images }: { images: GalleryImage[] }) {
               <div className="w-full aspect-square bg-black/5" />
             )}
 
-            {/* Hover overlay — stopPropagation on download buttons only, rest opens lightbox */}
             <div
               className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4 gap-3 cursor-zoom-in"
               onClick={() => setLightbox(img)}
@@ -76,11 +76,10 @@ export function DashboardGallery({ images }: { images: GalleryImage[] }) {
                 })}
               </p>
               <div className="flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
-                {img.previewUrls.map((url, i) => (
+                {img.previewUrls.map((_, i) => (
                   <a
                     key={i}
-                    href={url}
-                    download
+                    href={`/api/download?imageId=${img.id}&idx=${i}`}
                     className="border border-white text-white text-xs uppercase tracking-widest px-3 py-1.5 hover:bg-white hover:text-black transition-colors text-center"
                   >
                     {img.previewUrls.length > 1 ? `Downloaden ${i + 1}` : "Downloaden"}
@@ -92,7 +91,6 @@ export function DashboardGallery({ images }: { images: GalleryImage[] }) {
         ))}
       </div>
 
-      {/* Lightbox — no focus trap; Tab can escape the overlay (acceptable for MVP) */}
       {lightbox && (
         <div
           role="dialog"
@@ -101,7 +99,6 @@ export function DashboardGallery({ images }: { images: GalleryImage[] }) {
           className="fixed inset-0 z-50 bg-black/95 flex flex-col"
           onClick={close}
         >
-          {/* Top bar */}
           <div
             className="flex items-center justify-between px-6 py-4 shrink-0"
             onClick={(e) => e.stopPropagation()}
@@ -118,11 +115,10 @@ export function DashboardGallery({ images }: { images: GalleryImage[] }) {
               </p>
             </div>
             <div className="flex items-center gap-4">
-              {lightbox.previewUrls.map((url, i) => (
+              {lightbox.previewUrls.map((_, i) => (
                 <a
                   key={i}
-                  href={url}
-                  download
+                  href={`/api/download?imageId=${lightbox.id}&idx=${i}`}
                   className="border border-white text-white text-xs uppercase tracking-widest px-4 py-2 hover:bg-white hover:text-black transition-colors"
                 >
                   {lightbox.previewUrls.length > 1 ? `Downloaden ${i + 1}` : "Downloaden"}
@@ -138,7 +134,6 @@ export function DashboardGallery({ images }: { images: GalleryImage[] }) {
             </div>
           </div>
 
-          {/* Image area */}
           <div className="flex-1 flex items-center justify-center relative min-h-0 px-16">
             {currentIndex > 0 && (
               <button
