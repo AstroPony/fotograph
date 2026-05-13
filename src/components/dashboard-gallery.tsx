@@ -11,7 +11,14 @@ type GalleryImage = {
   previewUrls: string[];
 };
 
-export function DashboardGallery({ images }: { images: GalleryImage[] }) {
+type Props = {
+  images: GalleryImage[];
+  selectMode?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+};
+
+export function DashboardGallery({ images, selectMode = false, selectedIds = new Set(), onToggleSelect }: Props) {
   const [lightbox, setLightbox] = useState<GalleryImage | null>(null);
 
   const close = useCallback(() => setLightbox(null), []);
@@ -44,51 +51,84 @@ export function DashboardGallery({ images }: { images: GalleryImage[] }) {
     return () => { document.body.style.overflow = ""; };
   }, [lightbox]);
 
+  // Close lightbox when entering select mode
+  useEffect(() => {
+    if (selectMode) setLightbox(null);
+  }, [selectMode]);
+
   const currentIndex = lightbox ? images.findIndex((x) => x.id === lightbox.id) : -1;
+
+  const handleImageClick = useCallback((img: GalleryImage) => {
+    if (selectMode) {
+      onToggleSelect?.(img.id);
+    } else {
+      setLightbox(img);
+    }
+  }, [selectMode, onToggleSelect]);
 
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-px bg-black">
-        {images.map((img) => (
-          <div key={img.id} className="bg-white group relative overflow-hidden">
-            {img.previewUrls[0] ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={img.previewUrls[0]}
-                alt={`${SCENE_LABELS[img.sceneTheme ?? ""] ?? "Foto"} — ${img.id.slice(-6)}`}
-                className="w-full aspect-square object-cover cursor-zoom-in"
-                onClick={() => setLightbox(img)}
-              />
-            ) : (
-              <div className="w-full aspect-square bg-black/5" />
-            )}
-
+        {images.map((img) => {
+          const isSelected = selectedIds.has(img.id);
+          return (
             <div
-              className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4 gap-3 cursor-zoom-in"
-              onClick={() => setLightbox(img)}
+              key={img.id}
+              className={`bg-white group relative overflow-hidden ${selectMode ? "cursor-pointer" : ""}`}
+              onClick={() => handleImageClick(img)}
             >
-              <p className="text-white font-serif font-black text-lg uppercase leading-tight">
-                {SCENE_LABELS[img.sceneTheme ?? ""] ?? img.sceneTheme}
-              </p>
-              <p className="text-white/50 text-xs uppercase tracking-widest">
-                {new Date(img.createdAt).toLocaleDateString("nl-NL", {
-                  day: "numeric", month: "long", year: "numeric",
-                })}
-              </p>
-              <div className="flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
-                {img.previewUrls.map((_, i) => (
-                  <a
-                    key={i}
-                    href={`/api/download?imageId=${img.id}&idx=${i}`}
-                    className="border border-white text-white text-xs uppercase tracking-widest px-3 py-1.5 hover:bg-white hover:text-black transition-colors text-center"
-                  >
-                    {img.previewUrls.length > 1 ? `Downloaden ${i + 1}` : "Downloaden"}
-                  </a>
-                ))}
-              </div>
+              {img.previewUrls[0] ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={img.previewUrls[0]}
+                  alt={`${SCENE_LABELS[img.sceneTheme ?? ""] ?? "Foto"} — ${img.id.slice(-6)}`}
+                  className={`w-full aspect-square object-cover ${selectMode ? "" : "cursor-zoom-in"}`}
+                />
+              ) : (
+                <div className="w-full aspect-square bg-black/5" />
+              )}
+
+              {/* Select mode overlay */}
+              {selectMode && (
+                <div className={`absolute inset-0 transition-colors ${isSelected ? "bg-black/30" : "bg-transparent group-hover:bg-black/10"}`}>
+                  <div className={`absolute top-2 right-2 w-6 h-6 border-2 flex items-center justify-center transition-colors ${
+                    isSelected ? "border-black bg-black" : "border-white bg-white/80 group-hover:border-black"
+                  }`}>
+                    {isSelected && <span className="text-white text-xs leading-none font-bold">✓</span>}
+                  </div>
+                </div>
+              )}
+
+              {/* Normal hover overlay — hidden in select mode */}
+              {!selectMode && (
+                <div
+                  className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4 gap-3 cursor-zoom-in"
+                  onClick={() => setLightbox(img)}
+                >
+                  <p className="text-white font-serif font-black text-lg uppercase leading-tight">
+                    {SCENE_LABELS[img.sceneTheme ?? ""] ?? img.sceneTheme}
+                  </p>
+                  <p className="text-white/50 text-xs uppercase tracking-widest">
+                    {new Date(img.createdAt).toLocaleDateString("nl-NL", {
+                      day: "numeric", month: "long", year: "numeric",
+                    })}
+                  </p>
+                  <div className="flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    {img.previewUrls.map((_, i) => (
+                      <a
+                        key={i}
+                        href={`/api/download?imageId=${img.id}&idx=${i}`}
+                        className="border border-white text-white text-xs uppercase tracking-widest px-3 py-1.5 hover:bg-white hover:text-black transition-colors text-center"
+                      >
+                        {img.previewUrls.length > 1 ? `Downloaden ${i + 1}` : "Downloaden"}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {lightbox && (

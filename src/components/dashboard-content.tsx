@@ -37,6 +37,21 @@ export function DashboardContent({ done, processing, failed, hasMore: initialHas
   const [extraDone, setExtraDone] = useState<DashImage[]>([]);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }, []);
 
   const allDone = useMemo(() => [...done, ...extraDone], [done, extraDone]);
 
@@ -210,51 +225,99 @@ export function DashboardContent({ done, processing, failed, hasMore: initialHas
             </h2>
 
             <div className="flex flex-wrap items-center gap-2 ml-auto">
-              {/* Sort toggle */}
-              <button
-                onClick={() => setSortOrder((o) => o === "newest" ? "oldest" : "newest")}
-                className="text-[10px] uppercase tracking-widest border border-black/30 px-2 py-1 hover:border-black transition-colors"
-              >
-                {sortOrder === "newest" ? t("dashboard_sort_newest") : t("dashboard_sort_oldest")} ↕
-              </button>
-
-              {/* Scene filter chips */}
-              {sceneOptions.length > 1 && (
-                <div className="flex gap-1">
+              {!selectMode ? (
+                <>
+                  {/* Sort toggle */}
                   <button
-                    onClick={() => setSceneFilter(null)}
-                    className={`text-[10px] uppercase tracking-widest px-2 py-1 border transition-colors ${
-                      sceneFilter === null ? "border-black bg-black text-white" : "border-black/30 hover:border-black"
-                    }`}
+                    onClick={() => setSortOrder((o) => o === "newest" ? "oldest" : "newest")}
+                    className="text-[10px] uppercase tracking-widest border border-black/30 px-2 py-1 hover:border-black transition-colors"
                   >
-                    {t("dashboard_filter_all")}
+                    {sortOrder === "newest" ? t("dashboard_sort_newest") : t("dashboard_sort_oldest")} ↕
                   </button>
-                  {sceneOptions.map((s) => (
-                    <button
-                      key={s.id}
-                      onClick={() => setSceneFilter(sceneFilter === s.id ? null : s.id)}
-                      className={`text-[10px] uppercase tracking-widest px-2 py-1 border transition-colors hidden sm:block ${
-                        sceneFilter === s.id ? "border-black bg-black text-white" : "border-black/30 hover:border-black"
-                      }`}
-                    >
-                      {s.label}
-                    </button>
-                  ))}
-                </div>
-              )}
 
-              {/* ZIP download */}
-              <button
-                onClick={() => handleDownloadZip(filteredDone.map((i) => i.id))}
-                disabled={zipping || filteredDone.length === 0}
-                className="text-[10px] uppercase tracking-widest border border-black px-3 py-1 hover:bg-black hover:text-white transition-colors disabled:opacity-40"
-              >
-                {zipping ? "…" : t("dashboard_download_zip")}
-              </button>
+                  {/* Scene filter chips */}
+                  {sceneOptions.length > 1 && (
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setSceneFilter(null)}
+                        className={`text-[10px] uppercase tracking-widest px-2 py-1 border transition-colors ${
+                          sceneFilter === null ? "border-black bg-black text-white" : "border-black/30 hover:border-black"
+                        }`}
+                      >
+                        {t("dashboard_filter_all")}
+                      </button>
+                      {sceneOptions.map((s) => (
+                        <button
+                          key={s.id}
+                          onClick={() => setSceneFilter(sceneFilter === s.id ? null : s.id)}
+                          className={`text-[10px] uppercase tracking-widest px-2 py-1 border transition-colors hidden sm:block ${
+                            sceneFilter === s.id ? "border-black bg-black text-white" : "border-black/30 hover:border-black"
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Select mode toggle */}
+                  <button
+                    onClick={() => setSelectMode(true)}
+                    className="text-[10px] uppercase tracking-widest border border-black/30 px-2 py-1 hover:border-black transition-colors"
+                  >
+                    {t("dashboard_select")}
+                  </button>
+
+                  {/* ZIP all */}
+                  <button
+                    onClick={() => handleDownloadZip(filteredDone.map((i) => i.id))}
+                    disabled={zipping || filteredDone.length === 0}
+                    className="text-[10px] uppercase tracking-widest border border-black px-3 py-1 hover:bg-black hover:text-white transition-colors disabled:opacity-40"
+                  >
+                    {zipping ? "…" : t("dashboard_download_zip")}
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* Select all / deselect all */}
+                  <button
+                    onClick={() =>
+                      selectedIds.size === filteredDone.length
+                        ? setSelectedIds(new Set())
+                        : setSelectedIds(new Set(filteredDone.map((i) => i.id)))
+                    }
+                    className="text-[10px] uppercase tracking-widest border border-black/30 px-2 py-1 hover:border-black transition-colors"
+                  >
+                    {selectedIds.size === filteredDone.length ? t("dashboard_deselect_all") : t("dashboard_select_all")}
+                  </button>
+
+                  {/* Cancel */}
+                  <button
+                    onClick={exitSelectMode}
+                    className="text-[10px] uppercase tracking-widest border border-black/30 px-2 py-1 hover:border-black transition-colors"
+                  >
+                    {t("dashboard_select_cancel")}
+                  </button>
+
+                  {/* Download selected */}
+                  <button
+                    onClick={() => handleDownloadZip(Array.from(selectedIds))}
+                    disabled={zipping || selectedIds.size === 0}
+                    className="text-[10px] uppercase tracking-widest border border-black bg-black text-white px-3 py-1 hover:bg-white hover:text-black transition-colors disabled:opacity-40"
+                  >
+                    {zipping ? "…" : `${t("dashboard_download_selected")} (${selectedIds.size})`}
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
-          <DashboardGallery images={galleryImages} />
+          <DashboardGallery
+            images={galleryImages}
+            selectMode={selectMode}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelect}
+          />
 
           {hasMore && (
             <div className="mt-6 flex justify-center">

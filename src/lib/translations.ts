@@ -82,6 +82,11 @@ const nl = {
   dashboard_filter_all: "Alle",
   dashboard_download_zip: "Download ZIP",
   dashboard_load_more: "Meer laden",
+  dashboard_select: "Selecteren",
+  dashboard_select_all: "Alles selecteren",
+  dashboard_deselect_all: "Alles deselecteren",
+  dashboard_select_cancel: "Annuleren",
+  dashboard_download_selected: "Download geselecteerd",
   // Image statuses
   img_status_PENDING: "In wachtrij",
   img_status_REMOVING_BG: "Achtergrond",
@@ -284,6 +289,11 @@ const en: Record<keyof typeof nl, string> = {
   dashboard_filter_all: "All",
   dashboard_download_zip: "Download ZIP",
   dashboard_load_more: "Load more",
+  dashboard_select: "Select",
+  dashboard_select_all: "Select all",
+  dashboard_deselect_all: "Deselect all",
+  dashboard_select_cancel: "Cancel",
+  dashboard_download_selected: "Download selected",
   // Image statuses
   img_status_PENDING: "In queue",
   img_status_REMOVING_BG: "Removing BG",
