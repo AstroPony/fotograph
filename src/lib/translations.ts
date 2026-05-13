@@ -81,6 +81,7 @@ const nl = {
   dashboard_sort_oldest: "Oudste eerst",
   dashboard_filter_all: "Alle",
   dashboard_download_zip: "Download ZIP",
+  dashboard_load_more: "Meer laden",
   // Image statuses
   img_status_PENDING: "In wachtrij",
   img_status_REMOVING_BG: "Achtergrond",
@@ -282,6 +283,7 @@ const en: Record<keyof typeof nl, string> = {
   dashboard_sort_oldest: "Oldest first",
   dashboard_filter_all: "All",
   dashboard_download_zip: "Download ZIP",
+  dashboard_load_more: "Load more",
   // Image statuses
   img_status_PENDING: "In queue",
   img_status_REMOVING_BG: "Removing BG",

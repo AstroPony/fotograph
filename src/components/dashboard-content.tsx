@@ -21,11 +21,12 @@ type Props = {
   done: DashImage[];
   processing: DashImage[];
   failed: DashImage[];
+  hasMore: boolean;
 };
 
 const STUCK_MS = 30 * 60 * 1000; // 30 minutes
 
-export function DashboardContent({ done, processing, failed }: Props) {
+export function DashboardContent({ done, processing, failed, hasMore: initialHasMore }: Props) {
   const { t, lang } = useLanguage();
   const router = useRouter();
 
@@ -33,6 +34,11 @@ export function DashboardContent({ done, processing, failed }: Props) {
   const [sceneFilter, setSceneFilter] = useState<string | null>(null);
   const [retrying, setRetrying] = useState<Set<string>>(new Set());
   const [zipping, setZipping] = useState(false);
+  const [extraDone, setExtraDone] = useState<DashImage[]>([]);
+  const [hasMore, setHasMore] = useState(initialHasMore);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const allDone = useMemo(() => [...done, ...extraDone], [done, extraDone]);
 
   const sceneLabel = (id: string | null) =>
     id ? t(`scene_${id}` as TranslationKey) || id : "—";
@@ -43,14 +49,14 @@ export function DashboardContent({ done, processing, failed }: Props) {
   const dateLocale = lang === "nl" ? "nl-NL" : "en-GB";
 
   const sceneOptions = useMemo(() => {
-    const ids = new Set(done.map((i) => i.sceneTheme).filter(Boolean) as string[]);
+    const ids = new Set(allDone.map((i) => i.sceneTheme).filter(Boolean) as string[]);
     return SCENE_THEMES.filter((s) => ids.has(s.id));
-  }, [done]);
+  }, [allDone]);
 
   const filteredDone = useMemo(() => {
-    const list = sceneFilter ? done.filter((i) => i.sceneTheme === sceneFilter) : done;
+    const list = sceneFilter ? allDone.filter((i) => i.sceneTheme === sceneFilter) : allDone;
     return sortOrder === "oldest" ? [...list].reverse() : list;
-  }, [done, sceneFilter, sortOrder]);
+  }, [allDone, sceneFilter, sortOrder]);
 
   const galleryImages = useMemo(
     () => filteredDone.map((img) => ({ ...img, createdAt: new Date(img.createdAt) })),
@@ -69,6 +75,23 @@ export function DashboardContent({ done, processing, failed }: Props) {
       setRetrying((s) => { const next = new Set(s); next.delete(imageId); return next; });
     }
   }, [router]);
+
+  const handleLoadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const cursor = allDone[allDone.length - 1]?.id;
+      const res = await fetch(`/api/images?cursor=${cursor}&take=100`);
+      if (!res.ok) throw new Error();
+      const data: { images: DashImage[]; hasMore: boolean } = await res.json();
+      setExtraDone((prev) => [...prev, ...data.images]);
+      setHasMore(data.hasMore);
+    } catch {
+      // silent — user can retry
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, allDone]);
 
   const handleDownloadZip = useCallback(async (imageIds: string[]) => {
     if (!imageIds.length || zipping) return;
@@ -178,12 +201,12 @@ export function DashboardContent({ done, processing, failed }: Props) {
         </details>
       )}
 
-      {done.length > 0 ? (
+      {allDone.length > 0 ? (
         <section>
           {/* Section header with sort/filter/ZIP controls */}
           <div className="border-b border-black pb-2 mb-4 flex flex-wrap items-center gap-3">
             <h2 className="text-xs uppercase tracking-widest font-medium shrink-0">
-              {t("dashboard_ready")} — {filteredDone.length}{sceneFilter && done.length !== filteredDone.length ? `/${done.length}` : ""}
+              {t("dashboard_ready")} — {filteredDone.length}{sceneFilter && allDone.length !== filteredDone.length ? `/${allDone.length}` : ""}
             </h2>
 
             <div className="flex flex-wrap items-center gap-2 ml-auto">
@@ -232,6 +255,18 @@ export function DashboardContent({ done, processing, failed }: Props) {
           </div>
 
           <DashboardGallery images={galleryImages} />
+
+          {hasMore && (
+            <div className="mt-6 flex justify-center">
+              <button
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="border border-black px-8 py-2 text-xs uppercase tracking-widest font-medium hover:bg-black hover:text-white transition-colors disabled:opacity-40"
+              >
+                {loadingMore ? "…" : t("dashboard_load_more")}
+              </button>
+            </div>
+          )}
         </section>
       ) : processing.length === 0 && failed.length === 0 ? (
         <div className="border border-black p-12 flex flex-col items-center text-center gap-6">

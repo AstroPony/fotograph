@@ -23,12 +23,15 @@ export default async function DashboardPage() {
     data: { status: "FAILED" },
   });
 
+  const PAGE_SIZE = 100;
   const images = await prisma.image.findMany({
     where: { user: { supabaseId: user.id } },
     orderBy: { createdAt: "desc" },
-    take: 50,
+    take: PAGE_SIZE + 1,
     select: { id: true, status: true, sceneTheme: true, previewR2Keys: true, createdAt: true, batchId: true },
   });
+  const hasMore = images.length > PAGE_SIZE;
+  if (hasMore) images.pop();
 
   const imagesWithUrls = await Promise.all(
     images.map(async (img) => {
@@ -58,6 +61,7 @@ export default async function DashboardPage() {
         done={serialize(done)}
         processing={serialize(processing)}
         failed={serialize(failed)}
+        hasMore={hasMore}
       />
     </div>
   );
